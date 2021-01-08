@@ -1,3 +1,4 @@
+//go:generate mockgen -source=$GOFILE -destination=broker_mock.go -package=main
 package main
 
 type value = []byte
@@ -17,7 +18,6 @@ func newBroker(store storer) *broker {
 
 // Publish a message to a topic.
 func (b *broker) Publish(topicName string, value value) error {
-	// Check if topic exists, otherwise create it.
 	b.store.Insert(topicName, value)
 
 	return nil
