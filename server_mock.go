@@ -33,7 +33,7 @@ func (m *Mockbrokerer) EXPECT() *MockbrokererMockRecorder {
 }
 
 // Publish mocks base method
-func (m *Mockbrokerer) Publish(topic string, value interface{}) error {
+func (m *Mockbrokerer) Publish(topic string, value value) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Publish", topic, value)
 	ret0, _ := ret[0].(error)
@@ -47,10 +47,10 @@ func (mr *MockbrokererMockRecorder) Publish(topic, value interface{}) *gomock.Ca
 }
 
 // Subscribe mocks base method
-func (m *Mockbrokerer) Subscribe(topic string) (<-chan message, error) {
+func (m *Mockbrokerer) Subscribe(topic string) (<-chan value, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Subscribe", topic)
-	ret0, _ := ret[0].(<-chan message)
+	ret0, _ := ret[0].(<-chan value)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

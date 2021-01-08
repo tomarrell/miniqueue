@@ -1,6 +1,6 @@
 # MiniQueue
 
-A simple, single binary message queue using HTTP/2 push.
+A stupid simple, single binary message queue using HTTP/2 push.
 
 Most messaging workloads don't require enormous amounts of data, endless
 features or infinite scaling. Instead, they'd probably be better off with
@@ -17,6 +17,7 @@ consumers will receive what you published, nothing more.
 - Publish
 - Subscribe
 - Persistent
+- Prometheus metrics
 
 ## API
 

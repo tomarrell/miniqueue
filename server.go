@@ -12,8 +12,8 @@ import (
 const topicVarKey = "topic"
 
 type brokerer interface {
-	Publish(topic string, value interface{}) error
-	Subscribe(topic string) (<-chan message, error)
+	Publish(topic string, value value) error
+	Subscribe(topic string) (<-chan value, error)
 }
 
 type server struct {
@@ -30,7 +30,7 @@ func (s server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	route := mux.NewRouter()
 
 	route.Handle("/publish/{topic}", publish(s.broker)).Methods(http.MethodPost)
-	route.Handle("/subscribe", subscribe(s.broker)).Methods(http.MethodGet)
+	route.Handle("/subscribe/{topic}", subscribe(s.broker)).Methods(http.MethodGet)
 
 	route.ServeHTTP(w, r)
 }
