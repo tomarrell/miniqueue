@@ -31,3 +31,11 @@ consumers will receive what you published, nothing more.
 Run MiniQueue where you would like.
 
 It will then expose an HTTP/2 server used for publishing and consuming.
+
+## Contributing
+
+Contributors are more than welcome. Please feel free to open a PR to improve anything you don't like, or would like to add. No PR is too small!
+
+## License
+
+This project is licensed under the MIT license.
