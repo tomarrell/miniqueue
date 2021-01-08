@@ -1,6 +1,6 @@
 # MiniQueue
 
-![Tests](https://github.com/tomarrell/miniqueue/workflows/Test/badge.svg)
+![Tests](https://github.com/tomarrell/miniqueue/workflows/Tests/badge.svg)
 
 A stupid simple, single binary message queue using HTTP/2 push.
 
