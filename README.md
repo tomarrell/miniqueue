@@ -1,6 +1,7 @@
 # MiniQueue
 
 ![Tests](https://github.com/tomarrell/miniqueue/workflows/Tests/badge.svg)
+<img src="https://img.shields.io/badge/status-WIP-yellow">
 
 A stupid simple, single binary message queue using HTTP/2 push.
 
