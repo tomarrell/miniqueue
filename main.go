@@ -11,6 +11,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	tlsCertPath = "./testdata/localhost.pem"
+	tlsKeyPath  = "./testdata/localhost-key.pem"
+)
+
 func main() {
 	// If the binary is run with ENV=PRODUCTION, use JSON formatted logging.
 	if os.Getenv("ENV") != "PRODUCTION" {
@@ -26,7 +31,7 @@ func main() {
 
 	log.Info().Str("port", p).Msg("starting miniqueue")
 
-	if err := http.ListenAndServe(p, srv); !errors.Is(err, http.ErrServerClosed) {
+	if err := http.ListenAndServeTLS(p, tlsCertPath, tlsKeyPath, srv); !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal().Err(err).Msg("server closed")
 	}
 }

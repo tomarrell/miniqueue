@@ -47,12 +47,11 @@ func (mr *MockbrokererMockRecorder) Publish(topic, value interface{}) *gomock.Ca
 }
 
 // Subscribe mocks base method
-func (m *Mockbrokerer) Subscribe(topic string) (<-chan value, error) {
+func (m *Mockbrokerer) Subscribe(topic string) consumer {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Subscribe", topic)
-	ret0, _ := ret[0].(<-chan value)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret0, _ := ret[0].(consumer)
+	return ret0
 }
 
 // Subscribe indicates an expected call of Subscribe

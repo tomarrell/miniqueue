@@ -23,3 +23,6 @@ func TestBrokerPublish(t *testing.T) {
 
 	assert.NoError(t, b.Publish(topic, value))
 }
+
+func TestBrokerSubscribe(t *testing.T) {
+}

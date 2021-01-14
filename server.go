@@ -13,7 +13,7 @@ const topicVarKey = "topic"
 
 type brokerer interface {
 	Publish(topic string, value value) error
-	Subscribe(topic string) (<-chan value, error)
+	Subscribe(topic string) consumer
 }
 
 type server struct {
