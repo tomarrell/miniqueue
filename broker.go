@@ -8,7 +8,7 @@ type value = []byte
 // storer should be safe for concurrent use.
 type storer interface {
 	Insert(topic string, value value) error
-	Get(topic string) (value, error)
+	GetNext(topic string) (value, error)
 	Close() error
 }
 
@@ -54,5 +54,5 @@ type consumer struct {
 }
 
 func (c *consumer) Next() (value, error) {
-	return c.store.Get(c.topic)
+	return c.store.GetNext(c.topic)
 }

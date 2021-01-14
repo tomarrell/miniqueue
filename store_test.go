@@ -21,7 +21,7 @@ func TestInsert_Single(t *testing.T) {
 
 	assert.NoError(t, s.Insert(topic, value))
 
-	val, err := s.Get(topic)
+	val, err := s.GetNext(topic)
 	assert.NoError(t, err)
 	assert.Equal(t, value, val)
 }
@@ -71,9 +71,9 @@ func TestInsert_ThreeSameTopic(t *testing.T) {
 	assert.Equal(t, "test_value_3", string(val))
 }
 
-// GET
+// GETNEXT
 
-func TestGet(t *testing.T) {
+func TestGetNext(t *testing.T) {
 	s := newStore(tmpDBPath)
 	t.Cleanup(s.Destroy)
 
@@ -84,9 +84,22 @@ func TestGet(t *testing.T) {
 	assert.NoError(t, s.Insert(topic, []byte("test_value_1")))
 	assert.NoError(t, s.Insert(topic, []byte("test_value_2")))
 
-	val, err := s.Get(topic)
+	val, err := s.GetNext(topic)
 	assert.NoError(t, err)
 	assert.Equal(t, "test_value_1", string(val))
+}
+
+func TestGetNext_EmptyQueue(t *testing.T) {
+	s := newStore(tmpDBPath)
+	t.Cleanup(s.Destroy)
+
+	var (
+		topic = "test_topic"
+	)
+
+	val, err := s.GetNext(topic)
+	assert.Equal(t, ErrQueueEmpty, err)
+	assert.Equal(t, "", string(val))
 }
 
 // GETOFFSET

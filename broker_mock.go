@@ -46,19 +46,19 @@ func (mr *MockstorerMockRecorder) Insert(topic, value interface{}) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Insert", reflect.TypeOf((*Mockstorer)(nil).Insert), topic, value)
 }
 
-// Get mocks base method
-func (m *Mockstorer) Get(topic string) (value, error) {
+// GetNext mocks base method
+func (m *Mockstorer) GetNext(topic string) (value, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", topic)
+	ret := m.ctrl.Call(m, "GetNext", topic)
 	ret0, _ := ret[0].(value)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// Get indicates an expected call of Get
-func (mr *MockstorerMockRecorder) Get(topic interface{}) *gomock.Call {
+// GetNext indicates an expected call of GetNext
+func (mr *MockstorerMockRecorder) GetNext(topic interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*Mockstorer)(nil).Get), topic)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNext", reflect.TypeOf((*Mockstorer)(nil).GetNext), topic)
 }
 
 // Close mocks base method

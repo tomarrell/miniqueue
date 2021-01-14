@@ -3,12 +3,23 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"os"
 
 	"github.com/rs/zerolog/log"
 	"github.com/syndtr/goleveldb/leveldb"
 )
+
+const (
+	ErrQueueEmpty = storeError("queue is empty")
+)
+
+type storeError string
+
+func (s storeError) Error() string {
+	return string(s)
+}
 
 type store struct {
 	path string
@@ -91,11 +102,14 @@ func (s *store) Insert(topic string, value value) error {
 }
 
 // Get retrieves the first record for a topic.
-func (s *store) Get(topic string) (value, error) {
+func (s *store) GetNext(topic string) (value, error) {
 	headKey := []byte(fmt.Sprintf("%s-head", topic))
 
 	// Fetch the current head position
 	head, err := s.db.Get(headKey, nil)
+	if errors.Is(err, leveldb.ErrNotFound) {
+		return nil, ErrQueueEmpty
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -115,6 +129,9 @@ func (s *store) GetOffset(topic string, offset int64) (value, error) {
 	log.Debug().Str("key", key).Msg("fetching key")
 
 	val, err := s.db.Get([]byte(key), nil)
+	if errors.Is(err, leveldb.ErrNotFound) {
+		return val, ErrQueueEmpty
+	}
 	if err != nil {
 		return nil, err
 	}

@@ -12,6 +12,8 @@ import (
 )
 
 const (
+	dbPath = "/tmp/miniqueue_db"
+
 	tlsCertPath = "./testdata/localhost.pem"
 	tlsKeyPath  = "./testdata/localhost-key.pem"
 )
@@ -26,7 +28,7 @@ func main() {
 	flag.Parse()
 
 	// Start the server
-	srv := server{}
+	srv := newServer(newBroker(newStore(dbPath)))
 	p := fmt.Sprintf(":%s", *port)
 
 	log.Info().Str("port", p).Msg("starting miniqueue")
