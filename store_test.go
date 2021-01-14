@@ -89,7 +89,7 @@ func TestGetNext(t *testing.T) {
 	assert.Equal(t, "test_value_1", string(val))
 }
 
-func TestGetNext_EmptyQueue(t *testing.T) {
+func TestGetNext_TopicNotInitialised(t *testing.T) {
 	s := newStore(tmpDBPath)
 	t.Cleanup(s.Destroy)
 
@@ -98,7 +98,7 @@ func TestGetNext_EmptyQueue(t *testing.T) {
 	)
 
 	val, err := s.GetNext(topic)
-	assert.Equal(t, ErrQueueEmpty, err)
+	assert.Equal(t, ErrTopicNotExist, err)
 	assert.Equal(t, "", string(val))
 }
 
