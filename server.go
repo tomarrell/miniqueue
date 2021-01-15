@@ -2,6 +2,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -40,7 +41,7 @@ func (s server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func publish(broker brokerer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		log := log.With().Str("request_id", xid.New().String()).Logger()
+		log := log.With().Str("request_id", xid.New().String()).Str("handler", "publish").Logger()
 
 		// Read topic
 		vars := mux.Vars(r)
@@ -71,6 +72,8 @@ func publish(broker brokerer) http.HandlerFunc {
 
 func subscribe(broker brokerer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		log := log.With().Str("request_id", xid.New().String()).Str("handler", "subscribe").Logger()
+
 		// Read topic
 		vars := mux.Vars(r)
 		topic, ok := vars[topicVarKey]
@@ -91,6 +94,10 @@ func subscribe(broker brokerer) http.HandlerFunc {
 			return
 		}
 
-		w.Write(val)
+		log.Info().Str("value", string(val)).Msg("encoding value")
+
+		out := json.NewEncoder(w)
+		out.Encode(string(val))
+		out.Encode(string("hello, world!"))
 	}
 }

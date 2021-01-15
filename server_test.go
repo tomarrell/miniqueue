@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/golang/mock/gomock"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
@@ -64,9 +65,15 @@ func TestSubscribe_SingleMessage(t *testing.T) {
 	r = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/subscribe/%s", topic), nil)
 	r = mux.SetURLVars(r, map[string]string{"topic": topic})
 
-	subscribe(b)(subW, r)
-	assert.Equal(http.StatusOK, subW.Code)
-	assert.Equal(msg, subW.Body.String())
+	go subscribe(b)(subW, r)
+
+	// Wait for the first message to be written
+	decoder := NewDecodeWaiter(subW.Body)
+
+	// Read the first message
+	var out string
+	decoder.WaitAndDecode(&out)
+	assert.Equal(msg, out)
 }
 
 func TestSubscribe_MultipleMessages(t *testing.T) {
@@ -97,7 +104,18 @@ func TestSubscribe_MultipleMessages(t *testing.T) {
 	r = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/subscribe/%s", topic), nil)
 	r = mux.SetURLVars(r, map[string]string{"topic": topic})
 
-	subscribe(b)(subW, r)
-	assert.Equal(http.StatusOK, subW.Code)
-	assert.Equal(msg, subW.Body.String())
+	go subscribe(b)(subW, r)
+
+	// Wait for the first message to be written
+	decoder := NewDecodeWaiter(subW.Body)
+
+	// Read the first message
+	var out string
+	decoder.WaitAndDecode(&out)
+	assert.Equal(msg, out)
+
+	// Read the second message
+	decoder.WaitAndDecode(&out)
+	spew.Dump(out)
+	assert.Equal("hello, world!", out)
 }
