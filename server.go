@@ -34,7 +34,7 @@ func (s server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	route := mux.NewRouter()
 
 	route.HandleFunc("/publish/{topic}", publish(s.broker)).Methods(http.MethodPost)
-	route.HandleFunc("/subscribe/{topic}", subscribe(s.broker)).Methods(http.MethodGet)
+	route.HandleFunc("/subscribe/{topic}", subscribe(s.broker)).Methods(http.MethodPost)
 
 	route.ServeHTTP(w, r)
 }
@@ -98,7 +98,16 @@ func subscribe(broker brokerer) http.HandlerFunc {
 
 		out := json.NewEncoder(w)
 		out.Encode(string(val))
-		out.Encode(string("hello,\n world!"))
-		out.Encode(string("one more"))
+		out.Encode(string("hello world"))
+
+		// decoder := json.NewDecoder(r.Body)
+		// for {
+		// var in string
+		// err := decoder.Decode(&in)
+		// if err != nil {
+		// log.Err(err).Msg("decoding message")
+		// return
+		// }
+		// }
 	}
 }

@@ -52,7 +52,7 @@ func TestSubscribe_SingleMessage(t *testing.T) {
 	b := newBroker(&store{db: db})
 
 	// Publish to the topic
-	pubW := httptest.NewRecorder()
+	pubW := NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/publish/%s", topic), strings.NewReader(msg))
 	r = mux.SetURLVars(r, map[string]string{"topic": topic})
 
@@ -60,14 +60,14 @@ func TestSubscribe_SingleMessage(t *testing.T) {
 	assert.Equal(http.StatusOK, pubW.Code)
 
 	// Subscribe to the same topic
-	subW := httptest.NewRecorder()
+	subW := NewRecorder()
 	r = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/subscribe/%s", topic), nil)
 	r = mux.SetURLVars(r, map[string]string{"topic": topic})
 
 	go subscribe(b)(subW, r)
 
 	// Wait for the first message to be written
-	decoder := NewDecodeWaiter(subW.Body)
+	decoder := NewDecodeWaiter(subW)
 
 	// Read the first message
 	var out string
@@ -75,7 +75,7 @@ func TestSubscribe_SingleMessage(t *testing.T) {
 	assert.Equal(msg, out)
 }
 
-func TestSubscribe_MultipleMessages(t *testing.T) {
+func TestSubscribe_WithAck(t *testing.T) {
 	assert := assert.New(t)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -91,29 +91,29 @@ func TestSubscribe_MultipleMessages(t *testing.T) {
 	b := newBroker(&store{db: db})
 
 	// Publish to the topic
-	pubW := httptest.NewRecorder()
+	pubW := NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/publish/%s", topic), strings.NewReader(msg))
 	r = mux.SetURLVars(r, map[string]string{"topic": topic})
+
+	// Publish twice
+	publish(b)(pubW, r)
+	assert.Equal(http.StatusOK, pubW.Code)
 
 	publish(b)(pubW, r)
 	assert.Equal(http.StatusOK, pubW.Code)
 
 	// Subscribe to the same topic
-	subW := httptest.NewRecorder()
+	subW := NewRecorder()
 	r = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/subscribe/%s", topic), nil)
 	r = mux.SetURLVars(r, map[string]string{"topic": topic})
 
 	go subscribe(b)(subW, r)
 
 	// Wait for the first message to be written
-	decoder := NewDecodeWaiter(subW.Body)
+	decoder := NewDecodeWaiter(subW)
 
 	// Read the first message
 	var out string
 	assert.NoError(decoder.WaitAndDecode(&out))
 	assert.Equal(msg, out)
-
-	// Read the second message
-	assert.NoError(decoder.WaitAndDecode(&out))
-	assert.Equal("hello,\n world!", out)
 }

@@ -10,5 +10,6 @@ require (
 	github.com/rs/zerolog v1.20.0
 	github.com/stretchr/testify v1.6.1
 	github.com/syndtr/goleveldb v1.0.0
+	golang.org/x/net v0.0.0-20190620200207-3b0461eec859
 	golang.org/x/sys v0.0.0-20200223170610-d5e6a3e2c0ae // indirect
 )
