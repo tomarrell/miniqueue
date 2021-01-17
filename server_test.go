@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/golang/mock/gomock"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
@@ -72,7 +71,7 @@ func TestSubscribe_SingleMessage(t *testing.T) {
 
 	// Read the first message
 	var out string
-	decoder.WaitAndDecode(&out)
+	assert.NoError(decoder.WaitAndDecode(&out))
 	assert.Equal(msg, out)
 }
 
@@ -111,11 +110,10 @@ func TestSubscribe_MultipleMessages(t *testing.T) {
 
 	// Read the first message
 	var out string
-	decoder.WaitAndDecode(&out)
+	assert.NoError(decoder.WaitAndDecode(&out))
 	assert.Equal(msg, out)
 
 	// Read the second message
-	decoder.WaitAndDecode(&out)
-	spew.Dump(out)
-	assert.Equal("hello, world!", out)
+	assert.NoError(decoder.WaitAndDecode(&out))
+	assert.Equal("hello,\n world!", out)
 }

@@ -98,6 +98,7 @@ func subscribe(broker brokerer) http.HandlerFunc {
 
 		out := json.NewEncoder(w)
 		out.Encode(string(val))
-		out.Encode(string("hello, world!"))
+		out.Encode(string("hello,\n world!"))
+		out.Encode(string("one more"))
 	}
 }
