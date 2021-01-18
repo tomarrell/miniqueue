@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -27,7 +28,7 @@ func TestPublish_SingleMessage(t *testing.T) {
 	mockBroker := NewMockbrokerer(ctrl)
 	mockBroker.EXPECT().Publish(topic, []byte(value))
 
-	rec := httptest.NewRecorder()
+	rec := NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/publish/%s", topic), strings.NewReader(value))
 
 	srv := newServer(mockBroker)
@@ -91,11 +92,12 @@ func TestSubscribe_WithAck(t *testing.T) {
 	b := newBroker(&store{db: db})
 
 	// Publish to the topic
-	pubW := NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/publish/%s", topic), strings.NewReader(msg))
 	r = mux.SetURLVars(r, map[string]string{"topic": topic})
 
 	// Publish twice
+	pubW := NewRecorder()
+
 	publish(b)(pubW, r)
 	assert.Equal(http.StatusOK, pubW.Code)
 
@@ -103,8 +105,11 @@ func TestSubscribe_WithAck(t *testing.T) {
 	assert.Equal(http.StatusOK, pubW.Code)
 
 	// Subscribe to the same topic
+	buf := &safeBuffer{}
+	encoder := json.NewEncoder(buf)
+
 	subW := NewRecorder()
-	r = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/subscribe/%s", topic), nil)
+	r = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/subscribe/%s", topic), buf)
 	r = mux.SetURLVars(r, map[string]string{"topic": topic})
 
 	go subscribe(b)(subW, r)
@@ -112,8 +117,12 @@ func TestSubscribe_WithAck(t *testing.T) {
 	// Wait for the first message to be written
 	decoder := NewDecodeWaiter(subW)
 
-	// Read the first message
+	// Read the first message, expect the first item published to the queue
 	var out string
 	assert.NoError(decoder.WaitAndDecode(&out))
 	assert.Equal(msg, out)
+
+	assert.NoError(encoder.Encode("ACK"))
+	assert.NoError(decoder.WaitAndDecode(&out))
+	assert.Equal("ACK", out)
 }

@@ -87,27 +87,29 @@ func subscribe(broker brokerer) http.HandlerFunc {
 
 		c := broker.Subscribe(topic)
 
-		val, err := c.Next()
+		msg, err := c.Next()
 		if err != nil {
 			log.Err(err).Msg("getting next from consumer")
 			http.Error(w, fmt.Sprintf("failed to get next value for topic: %v", err), http.StatusInternalServerError)
 			return
 		}
 
-		log.Info().Str("value", string(val)).Msg("encoding value")
+		// Send back the first message on the queue
+		encoder := json.NewEncoder(w)
+		encoder.Encode(string(msg))
 
-		out := json.NewEncoder(w)
-		out.Encode(string(val))
-		out.Encode(string("hello world"))
-
-		// decoder := json.NewDecoder(r.Body)
-		// for {
-		// var in string
-		// err := decoder.Decode(&in)
-		// if err != nil {
-		// log.Err(err).Msg("decoding message")
-		// return
-		// }
-		// }
+		// Listen for an ACK
+		decoder := json.NewDecoder(r.Body)
+		for {
+			if decoder.More() {
+				var in string
+				if err := decoder.Decode(&in); err != nil {
+					log.Err(err).Msg("decoding message")
+					return
+				}
+				// Send the msg back
+				encoder.Encode(in)
+			}
+		}
 	}
 }
