@@ -22,6 +22,11 @@ func (s storeError) Error() string {
 	return string(s)
 }
 
+const (
+	headKeyFmt = "%s-head"
+	tailKeyFmt = "%s-tail"
+)
+
 type store struct {
 	path string
 	db   *leveldb.DB
@@ -43,8 +48,8 @@ func newStore(dbPath string) *store {
 // store if it doesn't already exist. If it does, the record is placed at the
 // end of the queue.
 func (s *store) Insert(topic string, value value) error {
-	headKey := []byte(fmt.Sprintf("%s-head", topic))
-	tailKey := []byte(fmt.Sprintf("%s-tail", topic))
+	headKey := []byte(fmt.Sprintf(headKeyFmt, topic))
+	tailKey := []byte(fmt.Sprintf(tailKeyFmt, topic))
 	exists, err := s.db.Has(tailKey, nil)
 	if err != nil {
 		return err
@@ -140,8 +145,46 @@ func (s *store) GetOffset(topic string, offset int64) (value, error) {
 	return val, nil
 }
 
-// TODO
-func (s *store) Ack(topic string) error {
+// IncHead increments the head key by 1.
+func (s *store) IncHead(topic string) error {
+	headKey := []byte(fmt.Sprintf(headKeyFmt, topic))
+
+	tx, err := s.db.OpenTransaction()
+	if err != nil {
+		return err
+	}
+
+	// Get the current head index
+	head, err := tx.Get(headKey, nil)
+	if errors.Is(err, leveldb.ErrNotFound) {
+		return ErrTopicNotExist
+	}
+	if err != nil {
+		return err
+	}
+
+	i, err := binary.ReadVarint(bytes.NewReader(head))
+	if err != nil {
+		return err
+	}
+
+	// Write the incremented head index
+	newHead := make([]byte, 8)
+	binary.PutVarint(newHead, i+1)
+	if err := tx.Put(headKey, newHead, nil); err != nil {
+		return err
+	}
+
+	// Delete the used value
+	key := fmt.Sprintf("%s-%d", topic, i)
+	if err := tx.Delete([]byte(key), nil); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
 	return nil
 }
 

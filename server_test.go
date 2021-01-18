@@ -83,7 +83,8 @@ func TestSubscribe_WithAck(t *testing.T) {
 
 	var (
 		topic = "test_topic"
-		msg   = "test_message"
+		msg1  = "test_message_1"
+		msg2  = "test_message_2"
 	)
 
 	db, err := leveldb.Open(storage.NewMemStorage(), nil)
@@ -92,7 +93,7 @@ func TestSubscribe_WithAck(t *testing.T) {
 	b := newBroker(&store{db: db})
 
 	// Publish to the topic
-	r := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/publish/%s", topic), strings.NewReader(msg))
+	r := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/publish/%s", topic), strings.NewReader(msg1))
 	r = mux.SetURLVars(r, map[string]string{"topic": topic})
 
 	// Publish twice
@@ -100,6 +101,10 @@ func TestSubscribe_WithAck(t *testing.T) {
 
 	publish(b)(pubW, r)
 	assert.Equal(http.StatusOK, pubW.Code)
+
+	// Publish a second time to the topic with a different body
+	r = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/publish/%s", topic), strings.NewReader(msg2))
+	r = mux.SetURLVars(r, map[string]string{"topic": topic})
 
 	publish(b)(pubW, r)
 	assert.Equal(http.StatusOK, pubW.Code)
@@ -120,9 +125,9 @@ func TestSubscribe_WithAck(t *testing.T) {
 	// Read the first message, expect the first item published to the queue
 	var out string
 	assert.NoError(decoder.WaitAndDecode(&out))
-	assert.Equal(msg, out)
+	assert.Equal(msg1, out)
 
 	assert.NoError(encoder.Encode(MsgAck))
 	assert.NoError(decoder.WaitAndDecode(&out))
-	assert.Equal(MsgAck, out)
+	assert.Equal(msg2, out)
 }

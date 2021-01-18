@@ -106,13 +106,30 @@ func subscribe(broker brokerer) http.HandlerFunc {
 		decoder := json.NewDecoder(r.Body)
 		for {
 			if decoder.More() {
-				var in string
-				if err := decoder.Decode(&in); err != nil {
+				var command string
+				if err := decoder.Decode(&command); err != nil {
 					log.Err(err).Msg("decoding message")
 					return
 				}
-				// Send the msg back
-				encoder.Encode(in)
+
+				log.Debug().Str("command", command).Msg("received command from client")
+
+				switch {
+				case command == MsgAck:
+					log.Info().Msg("received ACK")
+					err := c.Ack()
+
+					msg, err := c.Next()
+					if err != nil {
+						log.Err(err).Msg("getting next from consumer")
+						http.Error(w, fmt.Sprintf("failed to get next value for topic: %v", err), http.StatusInternalServerError)
+						return
+					}
+					encoder.Encode(string(msg))
+				default:
+					log.Error().Msg("unrecognised message received")
+					encoder.Encode("404")
+				}
 			}
 		}
 	}

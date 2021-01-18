@@ -9,6 +9,7 @@ type value = []byte
 type storer interface {
 	Insert(topic string, value value) error
 	GetNext(topic string) (value, error)
+	IncHead(topic string) error
 	Close() error
 }
 
@@ -55,4 +56,8 @@ type consumer struct {
 
 func (c *consumer) Next() (value, error) {
 	return c.store.GetNext(c.topic)
+}
+
+func (c *consumer) Ack() error {
+	return c.store.IncHead(c.topic)
 }
