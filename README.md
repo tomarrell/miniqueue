@@ -3,7 +3,7 @@
 ![Tests](https://github.com/tomarrell/miniqueue/workflows/Tests/badge.svg)
 <img src="https://img.shields.io/badge/status-WIP-yellow">
 
-A stupid simple, single binary message queue using HTTP/2 push.
+A stupid simple, single binary message queue using HTTP/2.
 
 Most messaging workloads don't require enormous amounts of data, endless
 features or infinite scaling. Instead, they'd probably be better off with
