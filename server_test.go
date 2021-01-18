@@ -122,7 +122,7 @@ func TestSubscribe_WithAck(t *testing.T) {
 	assert.NoError(decoder.WaitAndDecode(&out))
 	assert.Equal(msg, out)
 
-	assert.NoError(encoder.Encode("ACK"))
+	assert.NoError(encoder.Encode(MsgAck))
 	assert.NoError(decoder.WaitAndDecode(&out))
-	assert.Equal("ACK", out)
+	assert.Equal(MsgAck, out)
 }

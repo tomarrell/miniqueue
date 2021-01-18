@@ -13,7 +13,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const topicVarKey = "topic"
+const (
+	topicVarKey = "topic"
+
+	MsgAck = "ACK"
+)
 
 type brokerer interface {
 	Publish(topic string, value value) error
