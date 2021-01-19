@@ -76,7 +76,7 @@ func TestSubscribe_SingleMessage(t *testing.T) {
 	assert.Equal(msg, out)
 }
 
-func TestSubscribe_WithAck(t *testing.T) {
+func TestSubscribe_Ack(t *testing.T) {
 	assert := assert.New(t)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -127,6 +127,7 @@ func TestSubscribe_WithAck(t *testing.T) {
 	assert.NoError(decoder.WaitAndDecode(&out))
 	assert.Equal(msg1, out)
 
+	// Send an ACK back to the server, expect it to reply with next msg
 	assert.NoError(encoder.Encode(MsgAck))
 	assert.NoError(decoder.WaitAndDecode(&out))
 	assert.Equal(msg2, out)
