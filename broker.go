@@ -47,17 +47,3 @@ func (b *broker) Subscribe(topic string) consumer {
 func (b *broker) Shutdown() error {
 	return b.store.Close()
 }
-
-type consumer struct {
-	id    string
-	topic string
-	store storer
-}
-
-func (c *consumer) Next() (value, error) {
-	return c.store.GetNext(c.topic)
-}
-
-func (c *consumer) Ack() error {
-	return c.store.IncHead(c.topic)
-}

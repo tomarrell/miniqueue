@@ -27,6 +27,7 @@ const (
 	tailKeyFmt = "%s-tail"
 )
 
+// store handles the the underlying leveldb implementation.
 type store struct {
 	path string
 	db   *leveldb.DB
