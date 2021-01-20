@@ -39,8 +39,6 @@ func TestPublish_SingleMessage(t *testing.T) {
 
 func TestSubscribe_SingleMessage(t *testing.T) {
 	assert := assert.New(t)
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	var (
 		topic = "test_topic"
@@ -78,8 +76,6 @@ func TestSubscribe_SingleMessage(t *testing.T) {
 
 func TestSubscribe_Ack(t *testing.T) {
 	assert := assert.New(t)
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	var (
 		topic = "test_topic"
@@ -112,10 +108,12 @@ func TestSubscribe_Ack(t *testing.T) {
 	// Subscribe to the same topic
 	buf := &safeBuffer{}
 	encoder := json.NewEncoder(buf)
+	encoder.Encode(MsgInit)
 
 	subW := NewRecorder()
 	r = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/subscribe/%s", topic), buf)
 	r = mux.SetURLVars(r, map[string]string{"topic": topic})
+	r.Header.Add("Expect", "100-continue")
 
 	go subscribe(b)(subW, r)
 
@@ -131,4 +129,44 @@ func TestSubscribe_Ack(t *testing.T) {
 	assert.NoError(encoder.Encode(MsgAck))
 	assert.NoError(decoder.WaitAndDecode(&out))
 	assert.Equal(msg2, out)
+}
+
+func TestServerIntegration(t *testing.T) {
+	assert := assert.New(t)
+
+	var (
+		queueName = "test_queue"
+	)
+
+	db, err := leveldb.Open(storage.NewMemStorage(), nil)
+	assert.NoError(err)
+	b := newBroker(&store{db: db})
+
+	srv := httptest.NewUnstartedServer(newServer(b))
+	srv.EnableHTTP2 = true
+	srv.StartTLS()
+
+	// Publish
+	msg := "test_value"
+	publishPath := fmt.Sprintf("%s/publish/%s", srv.URL, queueName)
+	req, err := http.NewRequest(http.MethodPost, publishPath, strings.NewReader(msg))
+	assert.NoError(err)
+
+	res, err := srv.Client().Do(req)
+	assert.NoError(err)
+	defer res.Body.Close()
+
+	assert.Equal(http.StatusOK, res.StatusCode)
+
+	// Setup a subscriber
+	var buf safeBuffer
+	encoder := json.NewEncoder(&buf)
+	encoder.Encode(MsgInit)
+
+	subscribePath := fmt.Sprintf("%s/subscribe/%s", srv.URL, queueName)
+	req, err = http.NewRequest(http.MethodPost, subscribePath, &buf)
+
+	res, err = srv.Client().Do(req)
+	assert.NoError(err)
+	assert.Equal(http.StatusOK, res.StatusCode)
 }

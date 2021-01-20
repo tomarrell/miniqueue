@@ -16,7 +16,9 @@ import (
 const (
 	topicVarKey = "topic"
 
-	MsgAck = "ACK"
+	MsgInit    = "INIT"
+	MsgAck     = "ACK"
+	MsgUnknown = "UNKNOWN"
 )
 
 type brokerer interface {
@@ -98,38 +100,41 @@ func subscribe(broker brokerer) http.HandlerFunc {
 			return
 		}
 
+		decoder := json.NewDecoder(r.Body)
+
 		// Send back the first message on the queue
 		encoder := json.NewEncoder(w)
 		encoder.Encode(string(msg))
 
+		log.Info().Msg("written first message back to client")
+
 		// Listen for an ACK
-		decoder := json.NewDecoder(r.Body)
 		for {
-			if decoder.More() {
-				var command string
-				if err := decoder.Decode(&command); err != nil {
-					log.Err(err).Msg("decoding message")
+			var command string
+			if err := decoder.Decode(&command); err != nil {
+				log.Err(err).Msg("decoding message")
+				return
+			}
+
+			log.Debug().Str("command", command).Msg("received command from client")
+
+			switch command {
+			case MsgInit:
+				continue
+			case MsgAck:
+				log.Info().Msg("received ACK")
+				err := c.Ack()
+
+				msg, err := c.Next()
+				if err != nil {
+					log.Err(err).Msg("getting next from consumer")
+					http.Error(w, fmt.Sprintf("failed to get next value for topic: %v", err), http.StatusInternalServerError)
 					return
 				}
-
-				log.Debug().Str("command", command).Msg("received command from client")
-
-				switch {
-				case command == MsgAck:
-					log.Info().Msg("received ACK")
-					err := c.Ack()
-
-					msg, err := c.Next()
-					if err != nil {
-						log.Err(err).Msg("getting next from consumer")
-						http.Error(w, fmt.Sprintf("failed to get next value for topic: %v", err), http.StatusInternalServerError)
-						return
-					}
-					encoder.Encode(string(msg))
-				default:
-					log.Error().Msg("unrecognised message received")
-					encoder.Encode("404")
-				}
+				encoder.Encode(string(msg))
+			default:
+				log.Error().Msg("unrecognised message received")
+				encoder.Encode(MsgUnknown)
 			}
 		}
 	}
