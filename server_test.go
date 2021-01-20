@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -106,14 +107,15 @@ func TestSubscribe_Ack(t *testing.T) {
 	assert.Equal(http.StatusOK, pubW.Code)
 
 	// Subscribe to the same topic
-	buf := &safeBuffer{}
-	encoder := json.NewEncoder(buf)
-	encoder.Encode(MsgInit)
+	reader, writer := io.Pipe()
+	encoder := json.NewEncoder(writer)
+	go func() {
+		encoder.Encode(MsgInit)
+	}()
 
 	subW := NewRecorder()
-	r = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/subscribe/%s", topic), buf)
+	r = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/subscribe/%s", topic), reader)
 	r = mux.SetURLVars(r, map[string]string{"topic": topic})
-	r.Header.Add("Expect", "100-continue")
 
 	go subscribe(b)(subW, r)
 

@@ -100,8 +100,6 @@ func subscribe(broker brokerer) http.HandlerFunc {
 			return
 		}
 
-		decoder := json.NewDecoder(r.Body)
-
 		// Send back the first message on the queue
 		encoder := json.NewEncoder(w)
 		encoder.Encode(string(msg))
@@ -109,6 +107,7 @@ func subscribe(broker brokerer) http.HandlerFunc {
 		log.Info().Msg("written first message back to client")
 
 		// Listen for an ACK
+		decoder := json.NewDecoder(r.Body)
 		for {
 			var command string
 			if err := decoder.Decode(&command); err != nil {
