@@ -11,6 +11,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/gorilla/mux"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/storage"
@@ -171,4 +172,33 @@ func TestServerIntegration(t *testing.T) {
 	res, err = srv.Client().Do(req)
 	assert.NoError(err)
 	assert.Equal(http.StatusOK, res.StatusCode)
+}
+
+func BenchmarkPublish(b *testing.B) {
+
+	zerolog.SetGlobalLevel(zerolog.Disabled)
+
+	const (
+		topic = "test_topic"
+		msg   = "test_value"
+	)
+
+	db, err := leveldb.Open(storage.NewMemStorage(), nil)
+	assert.NoError(b, err)
+
+	srv := httptest.NewUnstartedServer(newServer(newBroker(&store{db: db})))
+	srv.EnableHTTP2 = true
+	srv.StartTLS()
+
+	var (
+		publishPath = fmt.Sprintf("%s/publish/%s", srv.URL, topic)
+	)
+
+	b.ResetTimer()
+
+	for n := 0; n < b.N; n++ {
+		req, _ := http.NewRequest(http.MethodPost, publishPath, strings.NewReader(msg))
+		_, err := srv.Client().Do(req)
+		assert.NoError(b, err)
+	}
 }
