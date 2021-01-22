@@ -132,7 +132,7 @@ func subscribe(broker brokerer) http.HandlerFunc {
 				}
 				encoder.Encode(string(msg))
 			default:
-				log.Error().Msg("unrecognised message received")
+				log.Error().Str("msg", string(msg)).Msg("unrecognised message received")
 				encoder.Encode(MsgUnknown)
 			}
 		}

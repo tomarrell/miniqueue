@@ -175,7 +175,6 @@ func TestServerIntegration(t *testing.T) {
 }
 
 func BenchmarkPublish(b *testing.B) {
-
 	zerolog.SetGlobalLevel(zerolog.Disabled)
 
 	const (
