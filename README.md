@@ -15,7 +15,9 @@ consumers will receive what you published, nothing more.
 ## Features
 
 - Simple to run
+- Very fast
 - Not infinitely scalable
+- Multiple topics
 - HTTP/2
 - Publish
 - Subscribe
