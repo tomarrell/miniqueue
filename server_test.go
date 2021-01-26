@@ -123,7 +123,7 @@ func TestSubscribe_Ack(t *testing.T) {
 	// Wait for the first message to be written
 	decoder := NewDecodeWaiter(subW)
 
-	// Read the first message, expect the first item published to the queue
+	// Read the first message, expect the first item published to the topic
 	var out string
 	assert.NoError(decoder.WaitAndDecode(&out))
 	assert.Equal(msg1, out)
@@ -138,7 +138,7 @@ func TestServerIntegration(t *testing.T) {
 	assert := assert.New(t)
 
 	var (
-		queueName = "test_queue"
+		topicName = "test_topic"
 	)
 
 	db, err := leveldb.Open(storage.NewMemStorage(), nil)
@@ -151,7 +151,7 @@ func TestServerIntegration(t *testing.T) {
 
 	// Publish
 	msg := "test_value"
-	publishPath := fmt.Sprintf("%s/publish/%s", srv.URL, queueName)
+	publishPath := fmt.Sprintf("%s/publish/%s", srv.URL, topicName)
 	req, err := http.NewRequest(http.MethodPost, publishPath, strings.NewReader(msg))
 	assert.NoError(err)
 
@@ -162,17 +162,36 @@ func TestServerIntegration(t *testing.T) {
 	assert.Equal(http.StatusOK, res.StatusCode)
 
 	// Setup a subscriber
-	var buf safeBuffer
-	encoder := json.NewEncoder(&buf)
-	encoder.Encode(MsgInit)
+	reader, writer := io.Pipe()
+	encoder := json.NewEncoder(writer)
+	go func() {
+		encoder.Encode(MsgInit)
+	}()
 
-	subscribePath := fmt.Sprintf("%s/subscribe/%s", srv.URL, queueName)
-	req, err = http.NewRequest(http.MethodPost, subscribePath, &buf)
+	req, err = http.NewRequest(
+		http.MethodPost,
+		fmt.Sprintf("%s/subscribe/%s", srv.URL, topicName),
+		reader,
+	)
 
+	// Subscribe to topic
 	res, err = srv.Client().Do(req)
 	assert.NoError(err)
 	assert.Equal(http.StatusOK, res.StatusCode)
+
+	decoder := json.NewDecoder(res.Body)
+
+	// Consume messages
+	var out string
+	assert.NoError(decoder.Decode(&out))
+	assert.Equal(msg, out)
+
+	encoder.Encode(MsgAck)
+
+	assert.Equal(io.EOF, decoder.Decode(&out))
 }
+
+// Benchmarking
 
 func BenchmarkPublish(b *testing.B) {
 	zerolog.SetGlobalLevel(zerolog.Disabled)

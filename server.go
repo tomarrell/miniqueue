@@ -100,18 +100,21 @@ func subscribe(broker brokerer) http.HandlerFunc {
 			return
 		}
 
-		// Send back the first message on the queue
-		encoder := json.NewEncoder(w)
+		// Each write to flusher will immediately flush to the client
+		flusher := newFlushWriter(w)
+
+		// Send back the first message on the topic
+		encoder := json.NewEncoder(flusher)
 		encoder.Encode(string(msg))
 
-		log.Info().Msg("written first message back to client")
+		log.Info().Str("msg", string(msg)).Msg("written first message back to client")
 
 		// Listen for an ACK
 		decoder := json.NewDecoder(r.Body)
 		for {
 			var command string
 			if err := decoder.Decode(&command); err != nil {
-				log.Err(err).Msg("decoding message")
+				log.Err(err).Msg("failed decoding message")
 				return
 			}
 
@@ -126,11 +129,15 @@ func subscribe(broker brokerer) http.HandlerFunc {
 
 				msg, err := c.Next()
 				if err != nil {
-					log.Err(err).Msg("getting next from consumer")
-					http.Error(w, fmt.Sprintf("failed to get next value for topic: %v", err), http.StatusInternalServerError)
+					log.Err(err).Msg("failed getting next from consumer")
 					return
 				}
-				encoder.Encode(string(msg))
+
+				log.Debug().Str("msg", string(msg)).Msg("sending next message to client")
+
+				if msg != nil {
+					encoder.Encode(string(msg))
+				}
 			default:
 				log.Error().Str("msg", string(msg)).Msg("unrecognised message received")
 				encoder.Encode(MsgUnknown)
