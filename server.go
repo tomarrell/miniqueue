@@ -3,6 +3,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -78,7 +79,10 @@ func publish(broker brokerer) http.HandlerFunc {
 
 func subscribe(broker brokerer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		log := log.With().Str("request_id", xid.New().String()).Str("handler", "subscribe").Logger()
+		log := log.With().
+			Str("request_id", xid.New().String()).
+			Str("handler", "subscribe").
+			Logger()
 
 		// Read topic
 		vars := mux.Vars(r)
@@ -100,14 +104,15 @@ func subscribe(broker brokerer) http.HandlerFunc {
 			return
 		}
 
-		// Each write to flusher will immediately flush to the client
-		flusher := newFlushWriter(w)
-
+		// Wrap the writer in a flushWriter in order to immediately flush each write
+		// to the client.
+		encoder := json.NewEncoder(newFlushWriter(w))
 		// Send back the first message on the topic
-		encoder := json.NewEncoder(flusher)
 		encoder.Encode(string(msg))
 
-		log.Info().Str("msg", string(msg)).Msg("written first message back to client")
+		log.Info().
+			Str("msg", string(msg)).
+			Msg("written first message back to client")
 
 		// Listen for an ACK
 		decoder := json.NewDecoder(r.Body)
@@ -118,22 +123,34 @@ func subscribe(broker brokerer) http.HandlerFunc {
 				return
 			}
 
-			log.Debug().Str("command", command).Msg("received command from client")
-
 			switch command {
 			case MsgInit:
+				log.Info().Msg("initialising consumer")
+
 				continue
 			case MsgAck:
-				log.Info().Msg("received ACK")
-				err := c.Ack()
+				log.Info().Msg("ACKing message")
 
-				msg, err := c.Next()
-				if err != nil {
-					log.Err(err).Msg("failed getting next from consumer")
+				if err := c.Ack(); err != nil {
+					log.Err(err).Msg("failed to ACK")
 					return
 				}
 
-				log.Debug().Str("msg", string(msg)).Msg("sending next message to client")
+				msg, err := c.Next()
+				if errors.Is(err, ErrTopicEmpty) {
+					// TODO wait for publish event which affects this topic
+					return
+				}
+				if err != nil {
+					log.Err(err).
+						Msg("failed getting next from consumer")
+
+					return
+				}
+
+				log.Debug().
+					Str("msg", string(msg)).
+					Msg("sending next message to client")
 
 				if msg != nil {
 					encoder.Encode(string(msg))
