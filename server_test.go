@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/gorilla/mux"
@@ -62,7 +64,7 @@ func TestSubscribe_SingleMessage(t *testing.T) {
 
 	// Subscribe to the same topic
 	subW := NewRecorder()
-	r = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/subscribe/%s", topic), nil)
+	r = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/subscribe/%s", topic), mustEncodeString(CmdInit))
 	r = mux.SetURLVars(r, map[string]string{"topic": topic})
 
 	go subscribe(b)(subW, r)
@@ -71,9 +73,9 @@ func TestSubscribe_SingleMessage(t *testing.T) {
 	decoder := NewDecodeWaiter(subW)
 
 	// Read the first message
-	var out string
+	var out subResponse
 	assert.NoError(decoder.WaitAndDecode(&out))
-	assert.Equal(msg, out)
+	assert.Equal(msg, out.Msg)
 }
 
 func TestSubscribe_Ack(t *testing.T) {
@@ -111,7 +113,7 @@ func TestSubscribe_Ack(t *testing.T) {
 	reader, writer := io.Pipe()
 	encoder := json.NewEncoder(writer)
 	go func() {
-		encoder.Encode(MsgInit)
+		encoder.Encode(CmdInit)
 	}()
 
 	subW := NewRecorder()
@@ -124,14 +126,14 @@ func TestSubscribe_Ack(t *testing.T) {
 	decoder := NewDecodeWaiter(subW)
 
 	// Read the first message, expect the first item published to the topic
-	var out string
+	var out subResponse
 	assert.NoError(decoder.WaitAndDecode(&out))
-	assert.Equal(msg1, out)
+	assert.Equal(msg1, out.Msg)
 
 	// Send an ACK back to the server, expect it to reply with next msg
-	assert.NoError(encoder.Encode(MsgAck))
+	assert.NoError(encoder.Encode(CmdAck))
 	assert.NoError(decoder.WaitAndDecode(&out))
-	assert.Equal(msg2, out)
+	assert.Equal(msg2, out.Msg)
 }
 
 func TestServerIntegration(t *testing.T) {
@@ -150,25 +152,19 @@ func TestServerIntegration(t *testing.T) {
 	srv.StartTLS()
 
 	// Publish
-	msg := "test_value"
-	publishPath := fmt.Sprintf("%s/publish/%s", srv.URL, topicName)
-	req, err := http.NewRequest(http.MethodPost, publishPath, strings.NewReader(msg))
-	assert.NoError(err)
-
-	res, err := srv.Client().Do(req)
-	assert.NoError(err)
-	defer res.Body.Close()
-
+	msg1 := "test_msg_1"
+	res := publishMsg(t, srv, topicName, msg1)
 	assert.Equal(http.StatusOK, res.StatusCode)
+	defer res.Body.Close()
 
 	// Setup a subscriber
 	reader, writer := io.Pipe()
 	encoder := json.NewEncoder(writer)
 	go func() {
-		encoder.Encode(MsgInit)
+		encoder.Encode(CmdInit)
 	}()
 
-	req, err = http.NewRequest(
+	req, err := http.NewRequest(
 		http.MethodPost,
 		fmt.Sprintf("%s/subscribe/%s", srv.URL, topicName),
 		reader,
@@ -182,14 +178,30 @@ func TestServerIntegration(t *testing.T) {
 
 	decoder := json.NewDecoder(res.Body)
 
-	// Consume messages
-	var out string
+	// Consume message
+	var out subResponse
 	assert.NoError(decoder.Decode(&out))
-	assert.Equal(msg, out)
+	assert.Equal(msg1, out.Msg)
 
-	encoder.Encode(MsgAck)
+	// Send back and ACK
+	assert.NoError(encoder.Encode(CmdAck))
 
-	assert.Equal(io.EOF, decoder.Decode(&out))
+	// Simulate the next publish coming in slightly later
+	// i.e. the next record may not be available already on the topic
+	time.Sleep(100 * time.Millisecond)
+
+	// Publish a new message to the same topic
+	msg2 := "test_msg_2"
+	res = publishMsg(t, srv, topicName, msg2)
+	assert.Equal(http.StatusOK, res.StatusCode)
+	defer res.Body.Close()
+
+	// Read again from the queue, expect the new message
+	assert.NoError(decoder.Decode(&out))
+	assert.Equal(msg2, out.Msg)
+
+	// Send back and ACK
+	assert.NoError(encoder.Encode(CmdAck))
 }
 
 // Benchmarking
@@ -220,4 +232,24 @@ func BenchmarkPublish(b *testing.B) {
 		_, err := srv.Client().Do(req)
 		assert.NoError(b, err)
 	}
+}
+
+func publishMsg(t *testing.T, srv *httptest.Server, topicName, msg string) *http.Response {
+	publishPath := fmt.Sprintf("%s/publish/%s", srv.URL, topicName)
+	req, err := http.NewRequest(http.MethodPost, publishPath, strings.NewReader(msg))
+	assert.NoError(t, err)
+
+	res, err := srv.Client().Do(req)
+	assert.NoError(t, err)
+
+	return res
+}
+
+func mustEncodeString(str string) io.Reader {
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(str); err != nil {
+		panic(err)
+	}
+
+	return &buf
 }

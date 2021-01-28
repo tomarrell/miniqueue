@@ -27,15 +27,25 @@ func newBroker(store storer) *broker {
 
 // Publish a message to a topic.
 func (b *broker) Publish(topicName string, value value) error {
-	return b.store.Insert(topicName, value)
+	if err := b.store.Insert(topicName, value); err != nil {
+		return err
+	}
+
+	// Notify the consumers of the topic of the new event
+	for _, c := range b.consumers[topicName] {
+		c.eventChan <- eventTypePublish
+	}
+
+	return nil
 }
 
 // Subscribe to a topic and return a consumer for the topic.
 func (b *broker) Subscribe(topic string) consumer {
 	cons := consumer{
-		id:    xid.New().String(),
-		topic: topic,
-		store: b.store,
+		id:        xid.New().String(),
+		topic:     topic,
+		store:     b.store,
+		eventChan: make(chan eventType),
 	}
 
 	b.consumers[topic] = append(b.consumers[topic], cons)

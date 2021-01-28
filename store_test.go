@@ -98,7 +98,7 @@ func TestGetNext_TopicNotInitialised(t *testing.T) {
 	)
 
 	val, err := s.GetNext(topic)
-	assert.Equal(t, ErrTopicNotExist, err)
+	assert.Equal(t, errTopicNotExist, err)
 	assert.Equal(t, "", string(val))
 }
 

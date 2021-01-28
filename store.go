@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	ErrTopicEmpty    = storeError("topic is empty")
-	ErrTopicNotExist = storeError("topic does not exist")
+	errTopicEmpty    = storeError("topic is empty")
+	errTopicNotExist = storeError("topic does not exist")
 )
 
 type storeError string
@@ -115,7 +115,7 @@ func (s *store) GetNext(topic string) (value, error) {
 	// Fetch the current head position
 	head, err := s.db.Get(headKey, nil)
 	if errors.Is(err, leveldb.ErrNotFound) {
-		return nil, ErrTopicNotExist
+		return nil, errTopicNotExist
 	}
 	if err != nil {
 		return nil, err
@@ -137,7 +137,7 @@ func (s *store) GetOffset(topic string, offset int64) (value, error) {
 
 	val, err := s.db.Get([]byte(key), nil)
 	if errors.Is(err, leveldb.ErrNotFound) {
-		return val, ErrTopicEmpty
+		return val, errTopicEmpty
 	}
 	if err != nil {
 		return nil, err
@@ -158,7 +158,7 @@ func (s *store) IncHead(topic string) error {
 	// Get the current head index
 	head, err := tx.Get(headKey, nil)
 	if errors.Is(err, leveldb.ErrNotFound) {
-		return ErrTopicNotExist
+		return errTopicNotExist
 	}
 	if err != nil {
 		return err

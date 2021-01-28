@@ -11,15 +11,25 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gorilla/mux"
 	"github.com/rs/xid"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
-const (
-	topicVarKey = "topic"
+const topicVarKey = "topic"
 
-	MsgInit    = "INIT"
-	MsgAck     = "ACK"
-	MsgUnknown = "UNKNOWN"
+const (
+	CmdInit    = "INIT"
+	CmdAck     = "ACK"
+	CmdUnknown = "UNKNOWN"
+)
+
+const (
+	errInvalidTopicValue = "invalid topic value"
+	errReadBody          = "error reading the request body"
+	errPublish           = "error publishing to broker"
+	errNextValue         = "error getting next value for consumer"
+	errAck               = "error ACKing message"
+	errDecodingCmd       = "error decoding command"
 )
 
 type brokerer interface {
@@ -48,36 +58,60 @@ func (s server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func publish(broker brokerer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		log := log.With().Str("request_id", xid.New().String()).Str("handler", "publish").Logger()
+		log := log.With().
+			Str("request_id", xid.New().String()).
+			Str("handler", "publish").
+			Logger()
 
 		// Read topic
 		vars := mux.Vars(r)
 		topic, ok := vars[topicVarKey]
 		if !ok {
+			log.Debug().
+				Msg("invalid topic in path")
+
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("invalid topic value"))
+			respondError(log, json.NewEncoder(w), errInvalidTopicValue)
+
+			return
 		}
 
-		log.Info().
+		log = log.With().
 			Str("topic", topic).
-			Msg("request to publish to topic")
+			Logger()
+
+		log.Info().
+			Msg("publishing to topic")
 
 		// Read body
 		b, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			log.Err(err).Msg("failed reading in body")
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Err(err).
+				Msg("failed reading request body")
+
+			w.WriteHeader(http.StatusInternalServerError)
+			respondError(log, json.NewEncoder(w), errReadBody)
+
 			return
 		}
 		defer r.Body.Close()
 
 		// Call broker to publish to topic
 		if err := broker.Publish(topic, b); err != nil {
-			http.Error(w, fmt.Sprintf("failed to publish: %v", err.Error()), http.StatusInternalServerError)
+			log.Err(err).
+				Msg("failed to publish to broker")
+
+			w.WriteHeader(http.StatusInternalServerError)
+			respondError(log, json.NewEncoder(w), errPublish)
+
+			return
 		}
 
-		log.Debug().Str("body", spew.Sprintf(string(b))).Msg("message body")
-		log.Info().Str("topic", topic).Msg("successfully published to topic")
+		w.WriteHeader(http.StatusOK)
+
+		log.Debug().
+			Str("body", spew.Sprintf(string(b))).
+			Msg("successfully published to topic")
 	}
 }
 
@@ -88,88 +122,149 @@ func subscribe(broker brokerer) http.HandlerFunc {
 			Str("handler", "subscribe").
 			Logger()
 
-		// Read topic
+		// Read topic from URL
 		vars := mux.Vars(r)
 		topic, ok := vars[topicVarKey]
 		if !ok {
+			log.Debug().
+				Msg("invalid topic in path")
+
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("invalid topic value"))
-			return
-		}
-
-		log.Info().Str("topic", topic).Msg("request to subscribe to topic")
-
-		consumer := broker.Subscribe(topic)
-
-		msg, err := consumer.Next()
-		if err != nil {
-			log.Err(err).
-				Msg("failed getting next from consumer")
-
-			http.Error(w, fmt.Sprintf("failed to get next value for topic: %v", err), http.StatusInternalServerError)
+			respondError(log, json.NewEncoder(w), errInvalidTopicValue)
 
 			return
 		}
+
+		log = log.With().
+			Str("topic", topic).
+			Logger()
+
+		log.Info().
+			Msg("subscribing to topic")
 
 		// Wrap the writer in a flushWriter in order to immediately flush each write
 		// to the client.
-		encoder := json.NewEncoder(newFlushWriter(w))
-		// Send back the first message on the topic
-		encoder.Encode(string(msg))
+		cons := broker.Subscribe(topic)
+		enc := json.NewEncoder(newFlushWriter(w))
+		dec := json.NewDecoder(r.Body)
 
-		log.Info().
-			Str("msg", string(msg)).
-			Msg("written first message back to client")
-
-		// Listen for an ACK
-		decoder := json.NewDecoder(r.Body)
 		for {
-			var command string
-			if err := decoder.Decode(&command); err != nil {
+			var cmd string
+			if err := dec.Decode(&cmd); err != nil {
 				log.Err(err).
-					Msg("failed decoding message")
+					Msg("failed decoding command")
+
+				respondError(log, enc, errDecodingCmd)
 
 				return
 			}
 
-			switch command {
-			case MsgInit:
-				log.Info().Msg("initialising consumer")
+			log = log.With().
+				Str("cmd", cmd).
+				Logger()
 
-				continue
+			switch cmd {
+			case CmdInit:
+				log.Debug().
+					Msg("initialising consumer")
 
-			case MsgAck:
-				log.Info().Msg("ACKing message")
+				msg, err := cons.Next()
+				if errors.Is(err, errTopicEmpty) {
+					msg, err = waitGetNext(cons)
+					if err != nil {
+						log.Err(err).Msg("failed to get next value for topic")
+						respondError(log, enc, errNextValue)
 
-				if err := consumer.Ack(); err != nil {
-					log.Err(err).Msg("failed to ACK")
-					return
-				}
-
-				msg, err := consumer.Next()
-				if errors.Is(err, ErrTopicEmpty) {
-					// TODO wait for publish event which affects this topic
-					return
+						return
+					}
 				}
 				if err != nil {
-					log.Err(err).
-						Msg("failed getting next from consumer")
+					log.Err(err).Msg("failed to get next value for topic")
+					respondError(log, enc, errNextValue)
 
 					return
 				}
+
+				respondMsg(log, enc, msg)
 
 				log.Debug().
 					Str("msg", string(msg)).
-					Msg("sending next message to client")
+					Msg("written message to client")
 
-				if msg != nil {
-					encoder.Encode(string(msg))
+			case CmdAck:
+				log.Debug().
+					Msg("ACKing message")
+
+				if err := cons.Ack(); err != nil {
+					log.Err(err).Msg("failed to ACK")
+					respondError(log, enc, errAck)
+
+					return
 				}
 
+				msg, err := cons.Next()
+				if errors.Is(err, errTopicEmpty) {
+					msg, err = waitGetNext(cons)
+					if err != nil {
+						log.Err(err).Msg("failed to get next value for topic")
+						respondError(log, enc, errNextValue)
+
+						return
+					}
+				}
+				if err != nil {
+					log.Err(err).Msg("failed to get next value for topic")
+					respondError(log, enc, errNextValue)
+
+					return
+				}
+
+				respondMsg(log, enc, msg)
+
+				log.Debug().
+					Str("msg", string(msg)).
+					Msg("written message to client")
+
 			default:
-				log.Error().Str("msg", string(msg)).Msg("unrecognised message received")
-				encoder.Encode(MsgUnknown)
+				log.Warn().
+					Msg("unrecognised command received")
+
+				respondError(log, enc, "unrecognised command received")
 			}
 		}
 	}
+}
+
+type subResponse struct {
+	Msg   string `json:"msg,omitempty"`
+	Error string `json:"error,omitempty"`
+}
+
+func respondMsg(log zerolog.Logger, e *json.Encoder, msg []byte) {
+	if err := e.Encode(subResponse{
+		Msg: string(msg),
+	}); err != nil {
+		log.Err(err).
+			Msg("failed to write response to client")
+	}
+}
+
+func respondError(log zerolog.Logger, e *json.Encoder, errMsg string) {
+	if err := e.Encode(subResponse{
+		Error: errMsg,
+	}); err != nil {
+		log.Err(err).
+			Msg("failed to write error response to client")
+	}
+}
+
+func waitGetNext(c consumer) ([]byte, error) {
+	<-c.eventChan
+
+	msg, err := c.Next()
+	if err != nil {
+		return nil, fmt.Errorf("failed getting next from consumer: %v", err)
+	}
+
+	return msg, nil
 }
