@@ -58,12 +58,16 @@ func publish(broker brokerer) http.HandlerFunc {
 			w.Write([]byte("invalid topic value"))
 		}
 
-		log.Info().Str("topic", topic).Msg("request to publish to topic")
+		log.Info().
+			Str("topic", topic).
+			Msg("request to publish to topic")
 
 		// Read body
 		b, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			panic("failed read")
+			log.Err(err).Msg("failed reading in body")
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 		defer r.Body.Close()
 
@@ -95,12 +99,15 @@ func subscribe(broker brokerer) http.HandlerFunc {
 
 		log.Info().Str("topic", topic).Msg("request to subscribe to topic")
 
-		c := broker.Subscribe(topic)
+		consumer := broker.Subscribe(topic)
 
-		msg, err := c.Next()
+		msg, err := consumer.Next()
 		if err != nil {
-			log.Err(err).Msg("getting next from consumer")
+			log.Err(err).
+				Msg("failed getting next from consumer")
+
 			http.Error(w, fmt.Sprintf("failed to get next value for topic: %v", err), http.StatusInternalServerError)
+
 			return
 		}
 
@@ -119,7 +126,9 @@ func subscribe(broker brokerer) http.HandlerFunc {
 		for {
 			var command string
 			if err := decoder.Decode(&command); err != nil {
-				log.Err(err).Msg("failed decoding message")
+				log.Err(err).
+					Msg("failed decoding message")
+
 				return
 			}
 
@@ -128,15 +137,16 @@ func subscribe(broker brokerer) http.HandlerFunc {
 				log.Info().Msg("initialising consumer")
 
 				continue
+
 			case MsgAck:
 				log.Info().Msg("ACKing message")
 
-				if err := c.Ack(); err != nil {
+				if err := consumer.Ack(); err != nil {
 					log.Err(err).Msg("failed to ACK")
 					return
 				}
 
-				msg, err := c.Next()
+				msg, err := consumer.Next()
 				if errors.Is(err, ErrTopicEmpty) {
 					// TODO wait for publish event which affects this topic
 					return
@@ -155,6 +165,7 @@ func subscribe(broker brokerer) http.HandlerFunc {
 				if msg != nil {
 					encoder.Encode(string(msg))
 				}
+
 			default:
 				log.Error().Str("msg", string(msg)).Msg("unrecognised message received")
 				encoder.Encode(MsgUnknown)

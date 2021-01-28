@@ -173,6 +173,7 @@ func TestServerIntegration(t *testing.T) {
 		fmt.Sprintf("%s/subscribe/%s", srv.URL, topicName),
 		reader,
 	)
+	assert.NoError(err)
 
 	// Subscribe to topic
 	res, err = srv.Client().Do(req)

@@ -6,6 +6,7 @@ import (
 )
 
 // safeBuffer is a goroutine safe bytes.safeBuffer
+//nolint:unused
 type safeBuffer struct {
 	buffer bytes.Buffer
 	sync.Mutex

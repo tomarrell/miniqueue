@@ -86,10 +86,6 @@ func NewRecorder() *ResponseRecorder {
 	}
 }
 
-// DefaultRemoteAddr is the default remote address to return in RemoteAddr if
-// an explicit DefaultRemoteAddr isn't set on ResponseRecorder.
-const DefaultRemoteAddr = "1.2.3.4"
-
 // Header implements http.ResponseWriter. It returns the response
 // headers to mutate within a handler. To test the headers that were
 // written after a handler completes, use the Result method and see
