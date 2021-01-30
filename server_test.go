@@ -19,21 +19,20 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/storage"
 )
 
+const defaultTopic = "test_topic"
+
 func TestPublish_SingleMessage(t *testing.T) {
 	assert := assert.New(t)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	var (
-		topic = "test_topic"
-		value = "test_value"
-	)
+	msg := "test_value"
 
 	mockBroker := NewMockbrokerer(ctrl)
-	mockBroker.EXPECT().Publish(topic, []byte(value))
+	mockBroker.EXPECT().Publish(defaultTopic, []byte(msg))
 
 	rec := NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/publish/%s", topic), strings.NewReader(value))
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/publish/%s", defaultTopic), strings.NewReader(msg))
 
 	srv := newServer(mockBroker)
 	srv.ServeHTTP(rec, req)
@@ -44,11 +43,6 @@ func TestPublish_SingleMessage(t *testing.T) {
 func TestSubscribe_SingleMessage(t *testing.T) {
 	assert := assert.New(t)
 
-	var (
-		topic = "test_topic"
-		msg   = "test_message"
-	)
-
 	db, err := leveldb.Open(storage.NewMemStorage(), nil)
 	assert.NoError(err)
 
@@ -56,16 +50,17 @@ func TestSubscribe_SingleMessage(t *testing.T) {
 
 	// Publish to the topic
 	pubW := NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/publish/%s", topic), strings.NewReader(msg))
-	r = mux.SetURLVars(r, map[string]string{"topic": topic})
+	msg := "test_message"
+	r := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/publish/%s", defaultTopic), strings.NewReader(msg))
+	r = mux.SetURLVars(r, map[string]string{"topic": defaultTopic})
 
 	publish(b)(pubW, r)
 	assert.Equal(http.StatusOK, pubW.Code)
 
 	// Subscribe to the same topic
 	subW := NewRecorder()
-	r = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/subscribe/%s", topic), mustEncodeString(CmdInit))
-	r = mux.SetURLVars(r, map[string]string{"topic": topic})
+	r = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/subscribe/%s", defaultTopic), helperMustEncodeString(CmdInit))
+	r = mux.SetURLVars(r, map[string]string{"topic": defaultTopic})
 
 	go subscribe(b)(subW, r)
 
@@ -81,20 +76,15 @@ func TestSubscribe_SingleMessage(t *testing.T) {
 func TestSubscribe_Ack(t *testing.T) {
 	assert := assert.New(t)
 
-	var (
-		topic = "test_topic"
-		msg1  = "test_message_1"
-		msg2  = "test_message_2"
-	)
-
 	db, err := leveldb.Open(storage.NewMemStorage(), nil)
 	assert.NoError(err)
 
 	b := newBroker(&store{db: db})
 
 	// Publish to the topic
-	r := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/publish/%s", topic), strings.NewReader(msg1))
-	r = mux.SetURLVars(r, map[string]string{"topic": topic})
+	msg1 := "test_message_1"
+	r := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/publish/%s", defaultTopic), strings.NewReader(msg1))
+	r = mux.SetURLVars(r, map[string]string{"topic": defaultTopic})
 
 	// Publish twice
 	pubW := NewRecorder()
@@ -103,8 +93,9 @@ func TestSubscribe_Ack(t *testing.T) {
 	assert.Equal(http.StatusOK, pubW.Code)
 
 	// Publish a second time to the topic with a different body
-	r = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/publish/%s", topic), strings.NewReader(msg2))
-	r = mux.SetURLVars(r, map[string]string{"topic": topic})
+	msg2 := "test_message_2"
+	r = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/publish/%s", defaultTopic), strings.NewReader(msg2))
+	r = mux.SetURLVars(r, map[string]string{"topic": defaultTopic})
 
 	publish(b)(pubW, r)
 	assert.Equal(http.StatusOK, pubW.Code)
@@ -117,8 +108,8 @@ func TestSubscribe_Ack(t *testing.T) {
 	}()
 
 	subW := NewRecorder()
-	r = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/subscribe/%s", topic), reader)
-	r = mux.SetURLVars(r, map[string]string{"topic": topic})
+	r = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/subscribe/%s", defaultTopic), reader)
+	r = mux.SetURLVars(r, map[string]string{"topic": defaultTopic})
 
 	go subscribe(b)(subW, r)
 
@@ -136,24 +127,15 @@ func TestSubscribe_Ack(t *testing.T) {
 	assert.Equal(msg2, out.Msg)
 }
 
-func TestServerIntegration(t *testing.T) {
+func TestServer(t *testing.T) {
 	assert := assert.New(t)
 
-	var (
-		topicName = "test_topic"
-	)
-
-	db, err := leveldb.Open(storage.NewMemStorage(), nil)
-	assert.NoError(err)
-	b := newBroker(&store{db: db})
-
-	srv := httptest.NewUnstartedServer(newServer(b))
-	srv.EnableHTTP2 = true
-	srv.StartTLS()
+	srv, srvCloser := helperNewTestServer(t)
+	defer srvCloser()
 
 	// Publish
 	msg1 := "test_msg_1"
-	res := publishMsg(t, srv, topicName, msg1)
+	res := helperPublishMessage(t, srv, defaultTopic, msg1)
 	assert.Equal(http.StatusOK, res.StatusCode)
 	defer res.Body.Close()
 
@@ -166,7 +148,7 @@ func TestServerIntegration(t *testing.T) {
 
 	req, err := http.NewRequest(
 		http.MethodPost,
-		fmt.Sprintf("%s/subscribe/%s", srv.URL, topicName),
+		fmt.Sprintf("%s/subscribe/%s", srv.URL, defaultTopic),
 		reader,
 	)
 	assert.NoError(err)
@@ -187,12 +169,13 @@ func TestServerIntegration(t *testing.T) {
 	assert.NoError(encoder.Encode(CmdAck))
 
 	// Simulate the next publish coming in slightly later
-	// i.e. the next record may not be available already on the topic
+	// i.e. the next record may not be available already on the topic to
+	// immediately send back
 	time.Sleep(100 * time.Millisecond)
 
 	// Publish a new message to the same topic
 	msg2 := "test_msg_2"
-	res = publishMsg(t, srv, topicName, msg2)
+	res = helperPublishMessage(t, srv, defaultTopic, msg2)
 	assert.Equal(http.StatusOK, res.StatusCode)
 	defer res.Body.Close()
 
@@ -234,7 +217,35 @@ func BenchmarkPublish(b *testing.B) {
 	}
 }
 
-func publishMsg(t *testing.T, srv *httptest.Server, topicName, msg string) *http.Response {
+//
+// Helpers
+//
+
+// Returns a new, started, httptest server and a corresponding function which
+// will force close connections and close the server when called.
+func helperNewTestServer(t *testing.T) (*httptest.Server, func()) {
+	t.Helper()
+
+	db, err := leveldb.Open(storage.NewMemStorage(), nil)
+	assert.NoError(t, err)
+
+	srv := httptest.NewUnstartedServer(newServer(newBroker(&store{
+		path: "",
+		db:   db,
+	})))
+
+	srv.EnableHTTP2 = true
+	srv.StartTLS()
+
+	return srv, func() {
+		srv.CloseClientConnections()
+		srv.Close()
+	}
+}
+
+func helperPublishMessage(t *testing.T, srv *httptest.Server, topicName, msg string) *http.Response {
+	t.Helper()
+
 	publishPath := fmt.Sprintf("%s/publish/%s", srv.URL, topicName)
 	req, err := http.NewRequest(http.MethodPost, publishPath, strings.NewReader(msg))
 	assert.NoError(t, err)
@@ -245,7 +256,7 @@ func publishMsg(t *testing.T, srv *httptest.Server, topicName, msg string) *http
 	return res
 }
 
-func mustEncodeString(str string) io.Reader {
+func helperMustEncodeString(str string) io.Reader {
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(str); err != nil {
 		panic(err)
