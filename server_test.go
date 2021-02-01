@@ -104,7 +104,7 @@ func TestSubscribe_Ack(t *testing.T) {
 	reader, writer := io.Pipe()
 	encoder := json.NewEncoder(writer)
 	go func() {
-		encoder.Encode(CmdInit)
+		assert.NoError(encoder.Encode(CmdInit))
 	}()
 
 	subW := NewRecorder()
@@ -140,25 +140,8 @@ func TestServer(t *testing.T) {
 	defer res.Body.Close()
 
 	// Setup a subscriber
-	reader, writer := io.Pipe()
-	encoder := json.NewEncoder(writer)
-	go func() {
-		encoder.Encode(CmdInit)
-	}()
-
-	req, err := http.NewRequest(
-		http.MethodPost,
-		fmt.Sprintf("%s/subscribe/%s", srv.URL, defaultTopic),
-		reader,
-	)
-	assert.NoError(err)
-
-	// Subscribe to topic
-	res, err = srv.Client().Do(req)
-	assert.NoError(err)
-	assert.Equal(http.StatusOK, res.StatusCode)
-
-	decoder := json.NewDecoder(res.Body)
+	encoder, decoder, closeSub := helperSubscribeTopic(t, srv, defaultTopic)
+	defer closeSub()
 
 	// Consume message
 	var out subResponse
@@ -185,6 +168,27 @@ func TestServer(t *testing.T) {
 
 	// Send back and ACK
 	assert.NoError(encoder.Encode(CmdAck))
+}
+
+func TestServer_MultiConsumer(t *testing.T) {
+	assert := assert.New(t)
+
+	srv, srvCloser := helperNewTestServer(t)
+	defer srvCloser()
+
+	// Publish
+	msg1 := "test_msg_1"
+	res := helperPublishMessage(t, srv, defaultTopic, msg1)
+	assert.Equal(http.StatusOK, res.StatusCode)
+	defer res.Body.Close()
+
+	// Subscribe
+	_, decoder, closeSub := helperSubscribeTopic(t, srv, defaultTopic)
+	defer closeSub()
+
+	var out subResponse
+	assert.NoError(decoder.Decode(&out))
+	assert.Equal(msg1, out.Msg)
 }
 
 // Benchmarking
@@ -240,6 +244,33 @@ func helperNewTestServer(t *testing.T) (*httptest.Server, func()) {
 	return srv, func() {
 		srv.CloseClientConnections()
 		srv.Close()
+	}
+}
+
+func helperSubscribeTopic(t *testing.T, srv *httptest.Server, topicName string) (*json.Encoder, *json.Decoder, func()) {
+	t.Helper()
+
+	reader, writer := io.Pipe()
+	encoder := json.NewEncoder(writer)
+	go func() {
+		assert.NoError(t, encoder.Encode(CmdInit))
+	}()
+
+	req, err := http.NewRequest(
+		http.MethodPost,
+		fmt.Sprintf("%s/subscribe/%s", srv.URL, topicName),
+		reader,
+	)
+	assert.NoError(t, err)
+
+	// Subscribe to topic
+	res, err := srv.Client().Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, res.StatusCode)
+
+	decoder := json.NewDecoder(res.Body)
+	return encoder, decoder, func() {
+		res.Body.Close()
 	}
 }
 
