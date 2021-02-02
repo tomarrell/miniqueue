@@ -11,6 +11,14 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
+// storer should be safe for concurrent use.
+type storer interface {
+	Insert(topic string, value value) error
+	GetNext(topic string) (ackKey string, val value, err error)
+	IncHead(topic string) error
+	Close() error
+}
+
 const (
 	errTopicEmpty    = storeError("topic is empty")
 	errTopicNotExist = storeError("topic does not exist")
@@ -33,7 +41,7 @@ type store struct {
 	db   *leveldb.DB
 }
 
-func newStore(dbPath string) *store {
+func newStore(dbPath string) storer {
 	db, err := leveldb.OpenFile(dbPath, nil)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to open levelDB")
@@ -109,28 +117,23 @@ func (s *store) Insert(topic string, value value) error {
 }
 
 // Get retrieves the first record for a topic.
-func (s *store) GetNext(topic string) (value, error) {
+func (s *store) GetNext(topic string) (ackKey string, val value, err error) {
 	headKey := []byte(fmt.Sprintf("%s-head", topic))
 
 	// Fetch the current head position
 	head, err := s.db.Get(headKey, nil)
 	if errors.Is(err, leveldb.ErrNotFound) {
-		return nil, errTopicNotExist
+		return "", nil, errTopicNotExist
 	}
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 
 	i, err := binary.ReadVarint(bytes.NewReader(head))
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 
-	return s.GetOffset(topic, i)
-}
-
-// GetOffset retrieves a record for a topic with a specific offset.
-func (s *store) GetOffset(topic string, offset int64) (value, error) {
 	key := fmt.Sprintf("%s-%d", topic, offset)
 
 	val, err := s.db.Get([]byte(key), nil)

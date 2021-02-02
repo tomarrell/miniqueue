@@ -5,14 +5,6 @@ import "github.com/rs/xid"
 
 type value = []byte
 
-// storer should be safe for concurrent use.
-type storer interface {
-	Insert(topic string, value value) error
-	GetNext(topic string) (value, error)
-	IncHead(topic string) error
-	Close() error
-}
-
 type broker struct {
 	store     storer
 	consumers map[string][]consumer
