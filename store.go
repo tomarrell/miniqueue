@@ -133,8 +133,6 @@ func (s *store) GetNext(topic string) (value, error) {
 func (s *store) GetOffset(topic string, offset int64) (value, error) {
 	key := fmt.Sprintf("%s-%d", topic, offset)
 
-	log.Debug().Str("key", key).Msg("fetching key")
-
 	val, err := s.db.Get([]byte(key), nil)
 	if errors.Is(err, leveldb.ErrNotFound) {
 		return val, errTopicEmpty

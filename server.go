@@ -18,9 +18,8 @@ import (
 const topicVarKey = "topic"
 
 const (
-	CmdInit    = "INIT"
-	CmdAck     = "ACK"
-	CmdUnknown = "UNKNOWN"
+	CmdInit = "INIT"
+	CmdAck  = "ACK"
 )
 
 const (
