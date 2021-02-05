@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/gorilla/mux"
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
@@ -109,7 +108,7 @@ func publish(broker brokerer) http.HandlerFunc {
 		w.WriteHeader(http.StatusOK)
 
 		log.Debug().
-			Str("body", spew.Sprintf(string(b))).
+			Str("body", string(b)).
 			Msg("successfully published to topic")
 	}
 }
@@ -167,16 +166,7 @@ func subscribe(broker brokerer) http.HandlerFunc {
 				log.Debug().
 					Msg("initialising consumer")
 
-				msg, err := cons.Next()
-				if errors.Is(err, errTopicEmpty) {
-					msg, err = waitGetNext(cons)
-					if err != nil {
-						log.Err(err).Msg("failed to get next value for topic")
-						respondError(log, enc, errNextValue)
-
-						return
-					}
-				}
+				msg, err := getNext(cons)
 				if err != nil {
 					log.Err(err).Msg("failed to get next value for topic")
 					respondError(log, enc, errNextValue)
@@ -201,16 +191,7 @@ func subscribe(broker brokerer) http.HandlerFunc {
 					return
 				}
 
-				msg, err := cons.Next()
-				if errors.Is(err, errTopicEmpty) {
-					msg, err = waitGetNext(cons)
-					if err != nil {
-						log.Err(err).Msg("failed to get next value for topic")
-						respondError(log, enc, errNextValue)
-
-						return
-					}
-				}
+				msg, err := getNext(cons)
 				if err != nil {
 					log.Err(err).Msg("failed to get next value for topic")
 					respondError(log, enc, errNextValue)
@@ -234,6 +215,27 @@ func subscribe(broker brokerer) http.HandlerFunc {
 	}
 }
 
+// getNext will attempt to retrieve the next value on the topic, or it will
+// block waiting for a msg indicating there is a new value available.
+func getNext(cons consumer) (msg value, err error) {
+	m, err := cons.Next()
+	if errors.Is(err, errTopicEmpty) {
+		<-cons.eventChan
+
+		m, err := cons.Next()
+		if err != nil {
+			return nil, fmt.Errorf("getting next from consumer: %v", err)
+		}
+
+		return m, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("getting next from consumer: %v", err)
+	}
+
+	return m, nil
+}
+
 type subResponse struct {
 	Msg   string `json:"msg,omitempty"`
 	Error string `json:"error,omitempty"`
@@ -253,17 +255,6 @@ func respondError(log zerolog.Logger, e *json.Encoder, errMsg string) {
 		Error: errMsg,
 	}); err != nil {
 		log.Err(err).
-			Msg("failed to write error response to client")
+			Msg("writing response to client")
 	}
-}
-
-func waitGetNext(c consumer) ([]byte, error) {
-	<-c.eventChan
-
-	msg, err := c.Next()
-	if err != nil {
-		return nil, fmt.Errorf("failed getting next from consumer: %v", err)
-	}
-
-	return msg, nil
 }

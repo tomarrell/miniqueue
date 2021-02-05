@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -8,114 +9,135 @@ import (
 
 const tmpDBPath = "/tmp/miniqueue_test_db"
 
-// INSERT
-
+// Insert
 func TestInsert_Single(t *testing.T) {
 	s := newStore(tmpDBPath)
 	t.Cleanup(s.Destroy)
 
-	var (
-		topic = "test_topic"
-		value = []byte("test_value")
-	)
+	assert.NoError(t, s.Insert(defaultTopic, []byte("test_value")))
 
-	assert.NoError(t, s.Insert(topic, value))
-
-	val, err := s.GetNext(topic)
+	val, _, err := s.GetNext(defaultTopic)
 	assert.NoError(t, err)
-	assert.Equal(t, value, val)
+	assert.Equal(t, "test_value", string(val))
 }
 
 func TestInsert_TwoSameTopic(t *testing.T) {
-	s := newStore(tmpDBPath)
+	s := newStore(tmpDBPath).(*store)
 	t.Cleanup(s.Destroy)
 
-	var (
-		topic = "test_topic"
-	)
+	assert.NoError(t, s.Insert(defaultTopic, []byte("test_value_1")))
+	assert.NoError(t, s.Insert(defaultTopic, []byte("test_value_2")))
 
-	assert.NoError(t, s.Insert(topic, []byte("test_value_1")))
-	assert.NoError(t, s.Insert(topic, []byte("test_value_2")))
-
-	val, err := s.GetOffset(topic, 0)
+	val, err := getOffset(s.db, topicFmt, defaultTopic, 0)
 	assert.NoError(t, err)
 	assert.Equal(t, "test_value_1", string(val))
 
-	val, err = s.GetOffset(topic, 1)
+	val, err = getOffset(s.db, topicFmt, defaultTopic, 1)
 	assert.NoError(t, err)
 	assert.Equal(t, "test_value_2", string(val))
 }
 
 func TestInsert_ThreeSameTopic(t *testing.T) {
-	s := newStore(tmpDBPath)
+	s := newStore(tmpDBPath).(*store)
 	t.Cleanup(s.Destroy)
 
-	var (
-		topic = "test_topic"
-	)
+	assert.NoError(t, s.Insert(defaultTopic, []byte("test_value_1")))
+	assert.NoError(t, s.Insert(defaultTopic, []byte("test_value_2")))
+	assert.NoError(t, s.Insert(defaultTopic, []byte("test_value_3")))
 
-	assert.NoError(t, s.Insert(topic, []byte("test_value_1")))
-	assert.NoError(t, s.Insert(topic, []byte("test_value_2")))
-	assert.NoError(t, s.Insert(topic, []byte("test_value_3")))
-
-	val, err := s.GetOffset(topic, 0)
+	val, err := getOffset(s.db, topicFmt, defaultTopic, 0)
 	assert.NoError(t, err)
 	assert.Equal(t, "test_value_1", string(val))
 
-	val, err = s.GetOffset(topic, 1)
+	val, err = getOffset(s.db, topicFmt, defaultTopic, 1)
 	assert.NoError(t, err)
 	assert.Equal(t, "test_value_2", string(val))
 
-	val, err = s.GetOffset(topic, 2)
+	val, err = getOffset(s.db, topicFmt, defaultTopic, 2)
 	assert.NoError(t, err)
 	assert.Equal(t, "test_value_3", string(val))
 }
 
-// GETNEXT
-
+// GetNext
 func TestGetNext(t *testing.T) {
 	s := newStore(tmpDBPath)
 	t.Cleanup(s.Destroy)
 
-	var (
-		topic = "test_topic"
-	)
+	assert.NoError(t, s.Insert(defaultTopic, []byte("test_value_1")))
+	assert.NoError(t, s.Insert(defaultTopic, []byte("test_value_2")))
+	assert.NoError(t, s.Insert(defaultTopic, []byte("test_value_3")))
 
-	assert.NoError(t, s.Insert(topic, []byte("test_value_1")))
-	assert.NoError(t, s.Insert(topic, []byte("test_value_2")))
-
-	val, err := s.GetNext(topic)
+	val, _, err := s.GetNext(defaultTopic)
 	assert.NoError(t, err)
 	assert.Equal(t, "test_value_1", string(val))
+
+	val, _, err = s.GetNext(defaultTopic)
+	assert.NoError(t, err)
+	assert.Equal(t, "test_value_2", string(val))
+
+	assert.NoError(t, s.Insert(defaultTopic, []byte("test_value_4")))
+
+	val, _, err = s.GetNext(defaultTopic)
+	assert.NoError(t, err)
+	assert.Equal(t, "test_value_3", string(val))
+
+	val, _, err = s.GetNext(defaultTopic)
+	assert.NoError(t, err)
+	assert.Equal(t, "test_value_4", string(val))
 }
 
 func TestGetNext_TopicNotInitialised(t *testing.T) {
 	s := newStore(tmpDBPath)
 	t.Cleanup(s.Destroy)
 
-	var (
-		topic = "test_topic"
-	)
-
-	val, err := s.GetNext(topic)
+	val, _, err := s.GetNext(defaultTopic)
 	assert.Equal(t, errTopicNotExist, err)
 	assert.Equal(t, "", string(val))
 }
 
-// GETOFFSET
-
-func TestGetOffset(t *testing.T) {
-	s := newStore(tmpDBPath)
+// Ack
+func TestAck(t *testing.T) {
+	s := newStore(tmpDBPath).(*store)
 	t.Cleanup(s.Destroy)
 
-	var (
-		topic = "test_topic"
-	)
+	ackOffset := 1
+	key := []byte(fmt.Sprintf(ackTopicFmt, defaultTopic, ackOffset))
+	assert.NoError(t, s.db.Put(key, []byte("hello_world"), nil))
 
-	assert.NoError(t, s.Insert(topic, []byte("test_value_1")))
-	assert.NoError(t, s.Insert(topic, []byte("test_value_2")))
+	assert.NoError(t, s.Ack(defaultTopic, ackOffset))
 
-	val, err := s.GetOffset(topic, 1)
+	has, err := s.db.Has(key, nil)
 	assert.NoError(t, err)
-	assert.Equal(t, "test_value_2", string(val))
+	assert.False(t, has)
+}
+
+func TestAckWithPos(t *testing.T) {
+	s := newStore(tmpDBPath).(*store)
+	t.Cleanup(s.Destroy)
+
+	err := s.Insert(defaultTopic, []byte("test_value_1"))
+	assert.NoError(t, err)
+
+	val, ackOffset, err := s.GetNext(defaultTopic)
+	assert.NoError(t, err)
+	assert.Equal(t, "test_value_1", string(val))
+
+	val, err = getOffset(s.db, ackTopicFmt, defaultTopic, ackOffset)
+	assert.NoError(t, err)
+	assert.Equal(t, "test_value_1", string(val))
+
+	assert.NoError(t, s.Ack(defaultTopic, ackOffset))
+
+	_, err = getOffset(s.db, ackTopicFmt, defaultTopic, ackOffset)
+	assert.Error(t, err)
+}
+
+// Nack
+func TestNack(t *testing.T) {
+	// TODO
+}
+
+// Close
+func TestClose(t *testing.T) {
+	// TODO
 }

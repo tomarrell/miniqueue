@@ -1,17 +1,8 @@
-//go:generate mockgen -source=$GOFILE -destination=broker_mock.go -package=main
 package main
 
 import "github.com/rs/xid"
 
 type value = []byte
-
-// storer should be safe for concurrent use.
-type storer interface {
-	Insert(topic string, value value) error
-	GetNext(topic string) (value, error)
-	IncHead(topic string) error
-	Close() error
-}
 
 type broker struct {
 	store     storer
@@ -33,7 +24,10 @@ func (b *broker) Publish(topicName string, value value) error {
 
 	// Notify the consumers of the topic of the new event
 	for _, c := range b.consumers[topicName] {
-		c.eventChan <- eventTypePublish
+		select {
+		case c.eventChan <- eventTypePublish:
+		default: // noop
+		}
 	}
 
 	return nil

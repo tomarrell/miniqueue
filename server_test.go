@@ -182,13 +182,28 @@ func TestServer_MultiConsumer(t *testing.T) {
 	assert.Equal(http.StatusOK, res.StatusCode)
 	defer res.Body.Close()
 
-	// Subscribe
-	_, decoder, closeSub := helperSubscribeTopic(t, srv, defaultTopic)
+	msg2 := "test_msg_2"
+	res = helperPublishMessage(t, srv, defaultTopic, msg2)
+	assert.Equal(http.StatusOK, res.StatusCode)
+	defer res.Body.Close()
+
+	// Set up consumer 1
+	_, decoder1, closeSub := helperSubscribeTopic(t, srv, defaultTopic)
 	defer closeSub()
 
-	var out subResponse
-	assert.NoError(decoder.Decode(&out))
-	assert.Equal(msg1, out.Msg)
+	// Set up consumer 2
+	_, decoder2, closeSub := helperSubscribeTopic(t, srv, defaultTopic)
+	defer closeSub()
+
+	// Read from consumer 1
+	var out1 subResponse
+	assert.NoError(decoder1.Decode(&out1))
+	assert.Equal(msg1, out1.Msg)
+
+	// Read from consumer 2
+	var out2 subResponse
+	assert.NoError(decoder2.Decode(&out2))
+	assert.Equal(msg2, out2.Msg)
 }
 
 // Benchmarking

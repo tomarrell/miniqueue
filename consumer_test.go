@@ -19,17 +19,19 @@ func TestConsumerNext(t *testing.T) {
 	)
 
 	mockStore := NewMockstorer(ctrl)
-	mockStore.EXPECT().GetNext(topic).Return(msg1, nil)
-	mockStore.EXPECT().GetNext(topic).Return(msg2, nil)
+	mockStore.EXPECT().GetNext(topic).Return(msg1, 0, nil)
+	mockStore.EXPECT().GetNext(topic).Return(msg2, 1, nil)
 
 	b := newBroker(mockStore)
 	c := b.Subscribe(topic)
 
-	val, err := c.Next()
+	// TODO check the ackKey
+	msg, err := c.Next()
 	assert.NoError(err)
-	assert.Equal(msg1, val)
+	assert.Equal(msg1, msg)
 
-	val, err = c.Next()
+	// TODO check the ackKey
+	msg, err = c.Next()
 	assert.NoError(err)
-	assert.Equal(msg2, val)
+	assert.Equal(msg2, msg)
 }
