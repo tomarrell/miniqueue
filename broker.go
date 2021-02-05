@@ -1,4 +1,3 @@
-//go:generate mockgen -source=$GOFILE -destination=broker_mock.go -package=main
 package main
 
 import "github.com/rs/xid"
@@ -25,7 +24,10 @@ func (b *broker) Publish(topicName string, value value) error {
 
 	// Notify the consumers of the topic of the new event
 	for _, c := range b.consumers[topicName] {
-		c.eventChan <- eventTypePublish
+		select {
+		case c.eventChan <- eventTypePublish:
+		default: // noop
+		}
 	}
 
 	return nil
