@@ -90,7 +90,6 @@ func (s *store) Ack(topic string, ackOffset int) error {
 // Nack will negatively acknowledge the value, on a given topic, returning it
 // to the front of the consumption queue.
 func (s *store) Nack(topic string, ackOffset int) error {
-
 	return nil
 }
 
@@ -149,8 +148,8 @@ func (s *store) Insert(topic string, value value) error {
 	return nil
 }
 
-// Get retrieves the first record for a topic, incrementing the head pointer of
-// the main array and pushing the value onto the ack array.
+// GetNext retrieves the first record for a topic, incrementing the head pointer
+// of the main array and pushing the value onto the ack array.
 func (s *store) GetNext(topic string) (value, int, error) {
 	headOffset, err := getPos(s.db, headPosKeyFmt, topic)
 	if err != nil {
