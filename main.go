@@ -20,19 +20,14 @@ const (
 )
 
 func main() {
-	humanReadable := flag.Bool("human", defaultHumanReadable, "human readable logging output")
-	flag.Parse()
+	var (
+		humanReadable = flag.Bool("human", defaultHumanReadable, "human readable logging output")
+		port          = flag.Int("port", defaultPort, "port used to run the server")
+		tlsCertPath   = flag.String("cert", defaultCertPath, "path to TLS certificate")
+		tlsKeyPath    = flag.String("key", defaultKeyPath, "path to TLS key")
+		dbPath        = flag.String("db", defaultDBPath, "path to the db file")
+	)
 
-	port := flag.Int("port", defaultPort, "port used to run the server")
-	flag.Parse()
-
-	tlsCertPath := flag.String("cert", defaultCertPath, "path to TLS certificate")
-	flag.Parse()
-
-	tlsKeyPath := flag.String("key", defaultKeyPath, "path to TLS key")
-	flag.Parse()
-
-	dbPath := flag.String("db", defaultDBPath, "path to the db file")
 	flag.Parse()
 
 	if *humanReadable {
