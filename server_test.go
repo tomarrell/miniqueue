@@ -136,7 +136,6 @@ func TestServer(t *testing.T) {
 	// Publish
 	msg1 := "test_msg_1"
 	res := helperPublishMessage(t, srv, defaultTopic, msg1)
-	assert.Equal(http.StatusOK, res.StatusCode)
 	defer res.Body.Close()
 
 	// Setup a subscriber
@@ -159,7 +158,6 @@ func TestServer(t *testing.T) {
 	// Publish a new message to the same topic
 	msg2 := "test_msg_2"
 	res = helperPublishMessage(t, srv, defaultTopic, msg2)
-	assert.Equal(http.StatusOK, res.StatusCode)
 	defer res.Body.Close()
 
 	// Read again from the queue, expect the new message
@@ -179,20 +177,18 @@ func TestServer_MultiConsumer(t *testing.T) {
 	// Publish
 	msg1 := "test_msg_1"
 	res := helperPublishMessage(t, srv, defaultTopic, msg1)
-	assert.Equal(http.StatusOK, res.StatusCode)
 	defer res.Body.Close()
 
 	msg2 := "test_msg_2"
 	res = helperPublishMessage(t, srv, defaultTopic, msg2)
-	assert.Equal(http.StatusOK, res.StatusCode)
 	defer res.Body.Close()
 
 	// Set up consumer 1
-	_, decoder1, closeSub := helperSubscribeTopic(t, srv, defaultTopic)
+	encoder1, decoder1, closeSub := helperSubscribeTopic(t, srv, defaultTopic)
 	defer closeSub()
 
 	// Set up consumer 2
-	_, decoder2, closeSub := helperSubscribeTopic(t, srv, defaultTopic)
+	encoder2, decoder2, closeSub := helperSubscribeTopic(t, srv, defaultTopic)
 	defer closeSub()
 
 	// Read from consumer 1
@@ -204,6 +200,31 @@ func TestServer_MultiConsumer(t *testing.T) {
 	var out2 subResponse
 	assert.NoError(decoder2.Decode(&out2))
 	assert.Equal(msg2, out2.Msg)
+
+	// Publish again
+	msg3 := "test_msg_3"
+	res = helperPublishMessage(t, srv, defaultTopic, msg3)
+	defer res.Body.Close()
+
+	msg4 := "test_msg_4"
+	res = helperPublishMessage(t, srv, defaultTopic, msg4)
+	defer res.Body.Close()
+
+	// Consumer 1 sends back an ACK for its message
+	assert.NoError(encoder1.Encode(CmdAck))
+
+	// It should receive the first message which has just been published
+	var out3 subResponse
+	assert.NoError(decoder1.Decode(&out3))
+	assert.Equal(msg3, out3.Msg)
+
+	// Consumer 2 sends back an ACK for its message
+	assert.NoError(encoder2.Encode(CmdAck))
+
+	// It should receive the second message that was published
+	var out4 subResponse
+	assert.NoError(decoder2.Decode(&out4))
+	assert.Equal(msg4, out4.Msg)
 }
 
 // Benchmarking
@@ -298,6 +319,7 @@ func helperPublishMessage(t *testing.T, srv *httptest.Server, topicName, msg str
 
 	res, err := srv.Client().Do(req)
 	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, res.StatusCode)
 
 	return res
 }
