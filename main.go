@@ -34,6 +34,18 @@ func main() {
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	}
 
+	if *dbPath == defaultDBPath {
+		log.Warn().Msgf("no DB path specified, using default %s", defaultDBPath)
+	}
+
+	if *tlsCertPath == defaultCertPath {
+		log.Warn().Msgf("no TLS certificate path specified, using default %s", defaultCertPath)
+	}
+
+	if *tlsKeyPath == defaultKeyPath {
+		log.Warn().Msgf("no TLS key path specified, using default %s", defaultKeyPath)
+	}
+
 	srv := newServer(newBroker(newStore(*dbPath)))
 
 	// Start the server
