@@ -12,28 +12,43 @@ import (
 )
 
 const (
-	dbPath = "/tmp/miniqueue_db"
-
-	tlsCertPath = "./testdata/localhost.pem"
-	tlsKeyPath  = "./testdata/localhost-key.pem"
+	defaultHumanReadable = false
+	defaultPort          = 8080
+	defaultCertPath      = "./testdata/localhost.pem"
+	defaultKeyPath       = "./testdata/localhost-key.pem"
+	defaultDBPath        = "/tmp/miniqueue"
 )
 
 func main() {
-	// If the binary is run with ENV=PRODUCTION, use JSON formatted logging.
-	if os.Getenv("ENV") != "PRODUCTION" {
+	humanReadable := flag.Bool("human", defaultHumanReadable, "human readable logging output")
+	flag.Parse()
+
+	port := flag.Int("port", defaultPort, "port used to run the server")
+	flag.Parse()
+
+	tlsCertPath := flag.String("cert", defaultCertPath, "path to TLS certificate")
+	flag.Parse()
+
+	tlsKeyPath := flag.String("key", defaultKeyPath, "path to TLS key")
+	flag.Parse()
+
+	dbPath := flag.String("db", defaultDBPath, "path to the db file")
+	flag.Parse()
+
+	if *humanReadable {
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	}
 
-	port := flag.String("port", "8080", "port used to run the server")
-	flag.Parse()
+	srv := newServer(newBroker(newStore(*dbPath)))
 
 	// Start the server
-	srv := newServer(newBroker(newStore(dbPath)))
-	p := fmt.Sprintf(":%s", *port)
+	p := fmt.Sprintf(":%d", *port)
 
-	log.Info().Str("port", p).Msg("starting miniqueue")
+	log.Info().
+		Str("port", p).
+		Msg("starting miniqueue")
 
-	if err := http.ListenAndServeTLS(p, tlsCertPath, tlsKeyPath, srv); !errors.Is(err, http.ErrServerClosed) {
+	if err := http.ListenAndServeTLS(p, *tlsCertPath, *tlsKeyPath, srv); !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal().Err(err).Msg("server closed")
 	}
 }
