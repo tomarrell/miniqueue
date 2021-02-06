@@ -32,9 +32,24 @@ consumers will receive what you published, nothing more.
 
 ## Usage
 
-Run MiniQueue where you would like.
+MiniQueue runs as a single binary, persisting the messages to the filesystem in
+a directory specified by the `-db` flag and exposes an HTTP/2 server on the port
+specified by the `-port` flag.
 
-It will then expose an HTTP/2 server used for publishing and consuming.
+```bash
+λ miniqueue -h
+Usage of ./miniqueue:
+  -cert string
+        path to TLS certificate (default "./testdata/localhost.pem")
+  -db string
+        path to the db file (default "/tmp/miniqueue")
+  -human
+        human readable logging output
+  -key string
+        path to TLS key (default "./testdata/localhost-key.pem")
+  -port int
+        port used to run the server (default 8080)
+```
 
 ## Benchmarks
 
