@@ -25,12 +25,10 @@ func TestConsumerNext(t *testing.T) {
 	b := newBroker(mockStore)
 	c := b.Subscribe(topic)
 
-	// TODO check the ackKey
 	msg, err := c.Next()
 	assert.NoError(err)
 	assert.Equal(msg1, msg)
 
-	// TODO check the ackKey
 	msg, err = c.Next()
 	assert.NoError(err)
 	assert.Equal(msg2, msg)
