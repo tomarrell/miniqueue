@@ -18,8 +18,12 @@ import (
 const topicVarKey = "topic"
 
 const (
+	// CmdInit is the command to be sent with the initial subscribe request to
+	// indicate a new consumer should be initialised.
 	CmdInit = "INIT"
-	CmdAck  = "ACK"
+	// CmdAck notifies the server that the outstanding message was processed
+	// successfully and can be removed from the queue.
+	CmdAck = "ACK"
 )
 
 const (
