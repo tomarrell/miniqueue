@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,12 +23,13 @@ const (
 )
 
 const (
-	errInvalidTopicValue = "invalid topic value"
-	errReadBody          = "error reading the request body"
-	errPublish           = "error publishing to broker"
-	errNextValue         = "error getting next value for consumer"
-	errAck               = "error ACKing message"
-	errDecodingCmd       = "error decoding command"
+	errInvalidTopicValue = serverError("invalid topic value")
+	errReadBody          = serverError("error reading the request body")
+	errPublish           = serverError("error publishing to broker")
+	errNextValue         = serverError("error getting next value for consumer")
+	errAck               = serverError("error ACKing message")
+	errDecodingCmd       = serverError("error decoding command")
+	errRequestCancelled  = serverError("request context cancelled")
 )
 
 type brokerer interface {
@@ -69,7 +71,7 @@ func publish(broker brokerer) http.HandlerFunc {
 				Msg("invalid topic in path")
 
 			w.WriteHeader(http.StatusBadRequest)
-			respondError(log, json.NewEncoder(w), errInvalidTopicValue)
+			respondError(log, json.NewEncoder(w), errInvalidTopicValue.Error())
 
 			return
 		}
@@ -88,7 +90,7 @@ func publish(broker brokerer) http.HandlerFunc {
 				Msg("failed reading request body")
 
 			w.WriteHeader(http.StatusInternalServerError)
-			respondError(log, json.NewEncoder(w), errReadBody)
+			respondError(log, json.NewEncoder(w), errReadBody.Error())
 
 			return
 		}
@@ -100,7 +102,7 @@ func publish(broker brokerer) http.HandlerFunc {
 				Msg("failed to publish to broker")
 
 			w.WriteHeader(http.StatusInternalServerError)
-			respondError(log, json.NewEncoder(w), errPublish)
+			respondError(log, json.NewEncoder(w), errPublish.Error())
 
 			return
 		}
@@ -115,6 +117,8 @@ func publish(broker brokerer) http.HandlerFunc {
 
 func subscribe(broker brokerer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
 		log := log.With().
 			Str("request_id", xid.New().String()).
 			Str("handler", "subscribe").
@@ -128,7 +132,7 @@ func subscribe(broker brokerer) http.HandlerFunc {
 				Msg("invalid topic in path")
 
 			w.WriteHeader(http.StatusBadRequest)
-			respondError(log, json.NewEncoder(w), errInvalidTopicValue)
+			respondError(log, json.NewEncoder(w), errInvalidTopicValue.Error())
 
 			return
 		}
@@ -147,12 +151,17 @@ func subscribe(broker brokerer) http.HandlerFunc {
 		dec := json.NewDecoder(r.Body)
 
 		for {
+			select {
+			case <-ctx.Done():
+			default:
+			}
+
 			var cmd string
 			if err := dec.Decode(&cmd); err != nil {
 				log.Err(err).
 					Msg("failed decoding command")
 
-				respondError(log, enc, errDecodingCmd)
+				respondError(log, enc, errDecodingCmd.Error())
 
 				return
 			}
@@ -166,10 +175,10 @@ func subscribe(broker brokerer) http.HandlerFunc {
 				log.Debug().
 					Msg("initialising consumer")
 
-				msg, err := getNext(cons)
+				msg, err := getNext(ctx, cons)
 				if err != nil {
 					log.Err(err).Msg("failed to get next value for topic")
-					respondError(log, enc, errNextValue)
+					respondError(log, enc, errNextValue.Error())
 
 					return
 				}
@@ -186,15 +195,15 @@ func subscribe(broker brokerer) http.HandlerFunc {
 
 				if err := cons.Ack(); err != nil {
 					log.Err(err).Msg("failed to ACK")
-					respondError(log, enc, errAck)
+					respondError(log, enc, errAck.Error())
 
 					return
 				}
 
-				msg, err := getNext(cons)
+				msg, err := getNext(ctx, cons)
 				if err != nil {
 					log.Err(err).Msg("failed to get next value for topic")
-					respondError(log, enc, errNextValue)
+					respondError(log, enc, errNextValue.Error())
 
 					return
 				}
@@ -217,10 +226,14 @@ func subscribe(broker brokerer) http.HandlerFunc {
 
 // getNext will attempt to retrieve the next value on the topic, or it will
 // block waiting for a msg indicating there is a new value available.
-func getNext(cons consumer) (msg value, err error) {
+func getNext(ctx context.Context, cons consumer) (msg value, err error) {
 	m, err := cons.Next()
 	if errors.Is(err, errTopicEmpty) {
-		<-cons.eventChan
+		select {
+		case <-cons.eventChan:
+		case <-ctx.Done():
+			return nil, errRequestCancelled
+		}
 
 		m, err := cons.Next()
 		if err != nil {
@@ -257,4 +270,10 @@ func respondError(log zerolog.Logger, e *json.Encoder, errMsg string) {
 		log.Err(err).
 			Msg("writing response to client")
 	}
+}
+
+type serverError string
+
+func (e serverError) Error() string {
+	return string(e)
 }
