@@ -38,8 +38,9 @@ type storer interface {
 }
 
 const (
-	errTopicEmpty    = storeError("topic is empty")
-	errTopicNotExist = storeError("topic does not exist")
+	errTopicEmpty     = storeError("topic is empty")
+	errTopicNotExist  = storeError("topic does not exist")
+	errAckMsgNotExist = storeError("msg to ack does not exist")
 )
 
 type storeError string
@@ -90,6 +91,44 @@ func (s *store) Ack(topic string, ackOffset int) error {
 // Nack will negatively acknowledge the value, on a given topic, returning it
 // to the front of the consumption queue.
 func (s *store) Nack(topic string, ackOffset int) error {
+	ackKey := []byte(fmt.Sprintf(ackTopicFmt, topic, ackOffset))
+
+	tx, err := s.db.OpenTransaction()
+	if err != nil {
+		return fmt.Errorf("opening transaction: %v", err)
+	}
+
+	exists, err := tx.Has(ackKey, nil)
+	if err != nil {
+		tx.Discard()
+		return fmt.Errorf("checking for has: %v", err)
+	}
+	if !exists {
+		tx.Discard()
+		return errAckMsgNotExist
+	}
+
+	val, err := getOffsetTx(tx, ackTopicFmt, topic, ackOffset)
+	if err != nil {
+		tx.Discard()
+		return fmt.Errorf("getting ack msg from topic %s at offset %d: %v", topic, ackOffset, err)
+	}
+
+	if _, err := prependValueTx(tx, headPosKeyFmt, topicFmt, topic, val); err != nil {
+		tx.Discard()
+		return fmt.Errorf("prepending value to topic %s: %v", topic, err)
+	}
+
+	if err := tx.Delete(ackKey, nil); err != nil {
+		tx.Discard()
+		return fmt.Errorf("deleting ackKey %s: %v", ackKey, err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		tx.Discard()
+		return fmt.Errorf("committing nack transaction: %v", err)
+	}
+
 	return nil
 }
 
@@ -148,8 +187,8 @@ func (s *store) Insert(topic string, value value) error {
 	return nil
 }
 
-// GetNext retrieves the first record for a topic, incrementing the head pointer
-// of the main array and pushing the value onto the ack array.
+// GetNext retrieves the first record for a topic, incrementing the head
+// position of the main array and pushing the value onto the ack array.
 func (s *store) GetNext(topic string) (value, int, error) {
 	headOffset, err := getPos(s.db, headPosKeyFmt, topic)
 	if err != nil {
@@ -166,7 +205,7 @@ func (s *store) GetNext(topic string) (value, int, error) {
 		return nil, 0, err
 	}
 
-	if _, _, err := incPos(s.db, headPosKeyFmt, topic); err != nil {
+	if _, _, err := addPos(s.db, headPosKeyFmt, topic, 1); err != nil {
 		return nil, 0, err
 	}
 
@@ -196,6 +235,19 @@ func getOffset(db *leveldb.DB, topicFmt string, topic string, offset int) (value
 	return val, nil
 }
 
+// getOffsetTx retrieves a record for a topic with a specific offset.
+func getOffsetTx(db *leveldb.Transaction, topicFmt string, topic string, offset int) (value, error) {
+	key := fmt.Sprintf(topicFmt, topic, offset)
+
+	val, err := db.Get([]byte(key), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return val, nil
+}
+
+// getPos gets the integer position value (aka offset) for topic and key format.
 func getPos(db *leveldb.DB, keyFmt string, topic string) (int, error) {
 	key := []byte(fmt.Sprintf(keyFmt, topic))
 
@@ -215,6 +267,27 @@ func getPos(db *leveldb.DB, keyFmt string, topic string) (int, error) {
 	return int(i), nil
 }
 
+// getPosTx gets the integer position value (aka offset) for topic and key format.
+func getPosTx(tx *leveldb.Transaction, keyFmt string, topic string) (int, error) {
+	key := []byte(fmt.Sprintf(keyFmt, topic))
+
+	pos, err := tx.Get(key, nil)
+	if errors.Is(err, leveldb.ErrNotFound) {
+		return 0, errTopicNotExist
+	}
+	if err != nil {
+		return 0, fmt.Errorf("getting offset position position: %v", err)
+	}
+
+	i, err := binary.ReadVarint(bytes.NewReader(pos))
+	if err != nil {
+		return 0, fmt.Errorf("reading offset position varint: %v", err)
+	}
+
+	return int(i), nil
+}
+
+// getValue returns the raw value stored given a key format, topic and offset.
 func getValue(db *leveldb.DB, keyFmt string, topic string, offset int) (value, error) {
 	key := fmt.Sprintf(keyFmt, topic, offset)
 
@@ -229,6 +302,8 @@ func getValue(db *leveldb.DB, keyFmt string, topic string, offset int) (value, e
 	return val, nil
 }
 
+// appendValue returns inserts a new value to the end of a topic given,
+// returning the inserted offset.
 func appendValue(db *leveldb.DB, tailPosKeyFmt, keyFmt, topic string, val value) (offset int, err error) {
 	tailPosKey := []byte(fmt.Sprintf(tailPosKeyFmt, topic))
 
@@ -260,19 +335,73 @@ func appendValue(db *leveldb.DB, tailPosKeyFmt, keyFmt, topic string, val value)
 	return int(origOffset), nil
 }
 
-func incPos(db *leveldb.DB, posKeyFmt string, topic string) (oldPosition, newPosition int, err error) {
+// prependValueTx inserts a value to the head of a topic, decrementing the head
+// position and returning the offset of the prepended value.
+func prependValueTx(tx *leveldb.Transaction, headPosKeyFmt, keyFmt, topic string, val value) (offset int, err error) {
+	headPosKey := []byte(fmt.Sprintf(headPosKeyFmt, topic))
+
+	// Fetch the current head position
+	headPosVal, err := tx.Get(headPosKey, nil)
+	if err != nil {
+		return 0, fmt.Errorf("getting head position from db: %v", err)
+	}
+
+	headOffset, err := binary.ReadVarint(bytes.NewReader(headPosVal))
+	if err != nil {
+		return 0, fmt.Errorf("reading head pos varint: %v", err)
+	}
+
+	// Write new record to lower neighbouring position
+	newHeadOffset := headOffset - 1
+	newKey := []byte(fmt.Sprintf(keyFmt, topic, newHeadOffset))
+
+	if err := tx.Put(newKey, val, nil); err != nil {
+		return 0, fmt.Errorf("putting value: %v", err)
+	}
+
+	// Update head position
+	_, newPosition, err := addPosTx(tx, headPosKeyFmt, topic, -1)
+	if err != nil {
+		return 0, fmt.Errorf("decrementing head pos by 1: %v", err)
+	}
+
+	return int(newPosition), nil
+}
+
+// addPos adds the an integer to a given position pointer.
+func addPos(db *leveldb.DB, posKeyFmt string, topic string, sum int) (oldPosition, newPosition int, err error) {
 	oldPos, err := getPos(db, posKeyFmt, topic)
 	if err != nil {
 		return 0, 0, err
 	}
 
-	newPos := oldPos + 1
+	newPos := oldPos + sum
 	newPosBytes := make([]byte, 8)
 	binary.PutVarint(newPosBytes, int64(newPos))
 
 	key := []byte(fmt.Sprintf(posKeyFmt, topic))
 
 	if err := db.Put(key, newPosBytes, nil); err != nil {
+		return 0, 0, fmt.Errorf("putting new increment position: %v", err)
+	}
+
+	return oldPos, newPos, nil
+}
+
+// addPosTx adds the an integer to a given position pointer.
+func addPosTx(tx *leveldb.Transaction, posKeyFmt string, topic string, sum int) (oldPosition, newPosition int, err error) {
+	oldPos, err := getPosTx(tx, posKeyFmt, topic)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	newPos := oldPos + sum
+	newPosBytes := make([]byte, 8)
+	binary.PutVarint(newPosBytes, int64(newPos))
+
+	key := []byte(fmt.Sprintf(posKeyFmt, topic))
+
+	if err := tx.Put(key, newPosBytes, nil); err != nil {
 		return 0, 0, fmt.Errorf("putting new increment position: %v", err)
 	}
 

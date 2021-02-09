@@ -134,7 +134,56 @@ func TestAckWithPos(t *testing.T) {
 
 // Nack
 func TestNack(t *testing.T) {
-	// TODO
+	s := newStore(tmpDBPath)
+	t.Cleanup(s.Destroy)
+
+	assert.NoError(t, s.Insert(defaultTopic, []byte("test_value_1")))
+
+	_, offset, err := s.GetNext(defaultTopic)
+	assert.NoError(t, err)
+
+	assert.NoError(t, s.Nack(defaultTopic, offset))
+}
+
+func TestNackTwice(t *testing.T) {
+	s := newStore(tmpDBPath)
+	t.Cleanup(s.Destroy)
+
+	assert.NoError(t, s.Insert(defaultTopic, []byte("test_value_1")))
+
+	_, offset, err := s.GetNext(defaultTopic)
+	assert.NoError(t, err)
+
+	// First Nack
+	assert.NoError(t, s.Nack(defaultTopic, offset))
+
+	// Second Nack
+	err = s.Nack(defaultTopic, offset)
+	assert.Error(t, err)
+	assert.Equal(t, err, errAckMsgNotExist)
+}
+
+func TestNackAndGet(t *testing.T) {
+	s := newStore(tmpDBPath)
+	t.Cleanup(s.Destroy)
+
+	var (
+		msg1 = "test_value_1"
+		msg2 = "test_value_2"
+	)
+
+	assert.NoError(t, s.Insert(defaultTopic, []byte(msg1)))
+	assert.NoError(t, s.Insert(defaultTopic, []byte(msg2)))
+
+	val, offset, err := s.GetNext(defaultTopic)
+	assert.NoError(t, err)
+	assert.Equal(t, msg1, string(val))
+
+	assert.NoError(t, s.Nack(defaultTopic, offset))
+
+	val, _, err = s.GetNext(defaultTopic)
+	assert.NoError(t, err)
+	assert.Equal(t, msg1, string(val))
 }
 
 // Close

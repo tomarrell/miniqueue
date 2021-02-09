@@ -31,7 +31,21 @@ func (c *consumer) Next() (val value, err error) {
 
 // Ack acknowledges the previously consumed value.
 func (c *consumer) Ack() error {
-	return c.store.Ack(c.topic, c.ackOffset)
+	if err := c.store.Ack(c.topic, c.ackOffset); err != nil {
+		return fmt.Errorf("acking topic %s with offset %d: %v", c.topic, c.ackOffset, err)
+	}
+
+	return nil
+}
+
+// Nack negatively acknowledges a message, returning it for consumption by other
+// consumers.
+func (c *consumer) Nack() error {
+	if err := c.store.Nack(c.topic, c.ackOffset); err != nil {
+		return fmt.Errorf("nacking topic %s with offset %d: %v", c.topic, c.ackOffset, err)
+	}
+
+	return nil
 }
 
 // EventChan returns a channel to notify the consumer of events occurring on the
