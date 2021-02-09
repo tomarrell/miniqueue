@@ -16,7 +16,7 @@ const (
 	defaultPort          = 8080
 	defaultCertPath      = "./testdata/localhost.pem"
 	defaultKeyPath       = "./testdata/localhost-key.pem"
-	defaultDBPath        = "/tmp/miniqueue"
+	defaultDBPath        = "./miniqueue"
 )
 
 func main() {
