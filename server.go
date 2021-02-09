@@ -112,7 +112,7 @@ func publish(broker brokerer) http.HandlerFunc {
 			return
 		}
 
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(http.StatusCreated)
 
 		log.Debug().
 			Str("body", string(b)).

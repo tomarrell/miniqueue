@@ -37,7 +37,7 @@ func TestPublishSingleMessage(t *testing.T) {
 	srv := newServer(mockBroker)
 	srv.ServeHTTP(rec, req)
 
-	assert.Equal(http.StatusOK, rec.Code)
+	assert.Equal(http.StatusCreated, rec.Code)
 }
 
 func TestSubscribeSingleMessage(t *testing.T) {
@@ -55,7 +55,7 @@ func TestSubscribeSingleMessage(t *testing.T) {
 	r = mux.SetURLVars(r, map[string]string{"topic": defaultTopic})
 
 	publish(b)(pubW, r)
-	assert.Equal(http.StatusOK, pubW.Code)
+	assert.Equal(http.StatusCreated, pubW.Code)
 
 	// Subscribe to the same topic
 	subW := NewRecorder()
@@ -90,7 +90,7 @@ func TestSubscribeAck(t *testing.T) {
 	pubW := NewRecorder()
 
 	publish(b)(pubW, r)
-	assert.Equal(http.StatusOK, pubW.Code)
+	assert.Equal(http.StatusCreated, pubW.Code)
 
 	// Publish a second time to the topic with a different body
 	msg2 := "test_message_2"
@@ -98,7 +98,7 @@ func TestSubscribeAck(t *testing.T) {
 	r = mux.SetURLVars(r, map[string]string{"topic": defaultTopic})
 
 	publish(b)(pubW, r)
-	assert.Equal(http.StatusOK, pubW.Code)
+	assert.Equal(http.StatusCreated, pubW.Code)
 
 	// Subscribe to the same topic
 	reader, writer := io.Pipe()
@@ -402,7 +402,7 @@ func helperPublishMessage(t *testing.T, srv *httptest.Server, topicName, msg str
 
 	res, err := srv.Client().Do(req)
 	assert.NoError(t, err)
-	assert.Equal(t, http.StatusOK, res.StatusCode)
+	assert.Equal(t, http.StatusCreated, res.StatusCode)
 
 	return res
 }
