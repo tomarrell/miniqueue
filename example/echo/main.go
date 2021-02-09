@@ -71,6 +71,8 @@ func main() {
 			log.Printf("failed decode response body: %v", err)
 		}
 
+		res.Body.Close()
+
 		fmt.Printf("Consumed message: %s\n", subRes.Msg)
 	}
 }
