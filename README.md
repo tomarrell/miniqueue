@@ -104,19 +104,19 @@ Available commands are:
 
 ## Benchmarks
 
-As MiniQueue is under heavy development, take these benchmarks with a grain of
+As MiniQueue is still under development, take these benchmarks with a grain of
 salt. However, for those curious:
 
 ```
 λ go-wrk -c 12 -d 10 -M POST -body "helloworld" https://localhost:8080/publish/test
 Running 10s test @ https://localhost:8080/publish/test
   12 goroutine(s) running concurrently
-104084 requests in 9.942585489s, 5.76MB read
-Requests/sec:           10468.50
-Transfer/sec:           592.94KB
-Avg Req Time:           1.146295ms
-Fastest Request:        262.281µs
-Slowest Request:        867.958415ms
+136332 requests in 9.925893077s, 7.54MB read
+Requests/sec:           13734.99
+Transfer/sec:           777.96KB
+Avg Req Time:           873.681µs
+Fastest Request:        199.93µs
+Slowest Request:        137.636069ms
 Number of Errors:       0
 ```
 
