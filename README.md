@@ -2,7 +2,7 @@
 
 ![Tests](https://github.com/tomarrell/miniqueue/workflows/Tests/badge.svg)
 [![Go Report Card](https://goreportcard.com/badge/github.com/tomarrell/miniqueue)](https://goreportcard.com/report/github.com/tomarrell/miniqueue)
-<img src="https://img.shields.io/badge/status-WIP-yellow">
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/tomarrell/miniqueue)
 
 A stupid simple, single binary message queue using HTTP/2.
 
