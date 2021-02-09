@@ -28,8 +28,17 @@ consumers will receive what you published, nothing more.
 
 ## API
 
-- POST `/publish/:topic`
-- GET `/subscribe/:topic`
+- POST `/publish/:topic`, where the body contains the bytes to publish to the topic. 
+
+  ```bash
+  curl -X POST https://localhost:8080/publish/foo --data "helloworld"
+  ```
+
+- POST `/subscribe/:topic` - streams messages separated by `\n`
+
+  - `client → server: "INIT"`
+  - `server → client: { "msg": "...", "error": "..." }`
+  - `client → server: "ACK"`
 
 ## Usage
 
@@ -52,13 +61,31 @@ Usage of ./miniqueue:
         port used to run the server (default 8080)
 ```
 
+You can also find example usage in the `./examples/` directory.
+
+## Commands
+
+A client may send commands to the server over a duplex connection. Commands are
+in the form of a **JSON string** to allow for simple encoding/decoding.
+
+Available commands are:
+
+- `"INIT"`: Establishes a new consumer on the topic. If you are consuming for
+    the first time, this should be sent along with the request.
+
+- `"ACK"`: Acknowledges the current message, popping it from the topic and
+    removing it.
+
+- `"NACK"`: Negatively acknowledges the current message, causing it to be put back
+    to the front of the queue, ready for other consumers.
+
 ## Benchmarks
 
 As MiniQueue is under heavy development, take these benchmarks with a grain of
 salt. However, for those curious:
 
 ```
-λ ~/ go-wrk -c 12 -d 10 -M POST -body "helloworld" https://localhost:8080/publish/test
+λ go-wrk -c 12 -d 10 -M POST -body "helloworld" https://localhost:8080/publish/test
 Running 10s test @ https://localhost:8080/publish/test
   12 goroutine(s) running concurrently
 104084 requests in 9.942585489s, 5.76MB read
