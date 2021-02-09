@@ -10,8 +10,9 @@ Most messaging workloads don't require enormous amounts of data, endless
 features or infinite scaling. Instead, they'd probably be better off with
 something dead simple.
 
-MiniQueue is just that. A simple queue. You can publish bytes to topics and your
-consumers will receive what you published, nothing more.
+MiniQueue is just that. A ridiculously simple, high performance queue. You can
+publish bytes to topics and be sure that your consumers will receive what you
+published, nothing more.
 
 ## Features
 
@@ -40,19 +41,25 @@ consumers will receive what you published, nothing more.
   - `server → client: { "msg": "...", "error": "..." }`
   - `client → server: "ACK"`
 
+You can also find example usage in the `./examples/` directory.
+
 ## Usage
 
 MiniQueue runs as a single binary, persisting the messages to the filesystem in
 a directory specified by the `-db` flag and exposes an HTTP/2 server on the port
 specified by the `-port` flag.
 
+**Note:** As the server uses HTTP/2, TLS is required. For testing, you can
+generate a certificate using [mkcert](https://github.com/FiloSottile/mkcert) and
+replace the ones in `./testdata` as these will not be trusted by your client, or
+specify your own certificate using the `-cert` and `-key` flags.
+
 ```bash
-λ miniqueue -h
 Usage of ./miniqueue:
   -cert string
         path to TLS certificate (default "./testdata/localhost.pem")
   -db string
-        path to the db file (default "/tmp/miniqueue")
+        path to the db file (default "./miniqueue")
   -human
         human readable logging output
   -key string
@@ -61,7 +68,23 @@ Usage of ./miniqueue:
         port used to run the server (default 8080)
 ```
 
-You can also find example usage in the `./examples/` directory.
+##### Start miniqueue with human readable logs
+
+```bash
+λ ./miniqueue -human
+```
+
+##### Start miniqueue with custom TLS certificate
+
+```bash
+λ ./miniqueue -cert ./localhost.pem -key ./localhost-key.pem
+```
+
+##### Start miniqueue on custom port
+
+```bash
+λ ./miniqueue -port 8081
+```
 
 ## Commands
 
