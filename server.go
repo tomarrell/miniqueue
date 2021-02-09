@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 
@@ -155,15 +156,38 @@ func subscribe(broker brokerer) http.HandlerFunc {
 		dec := json.NewDecoder(r.Body)
 
 		for {
+			log := log
+
 			select {
 			case <-ctx.Done():
+				if err := cons.Nack(); err != nil {
+					log.Err(err).
+						Msg("failed to nack")
+				}
+
+				return
 			default:
 			}
 
 			var cmd string
-			if err := dec.Decode(&cmd); err != nil {
+			if err := dec.Decode(&cmd); errors.Is(err, io.EOF) {
+				log.Warn().
+					Msg("connection ending with EOF")
+
+				if err := cons.Nack(); err != nil {
+					log.Err(err).
+						Msg("failed to nack")
+				}
+
+				return
+			} else if err != nil {
 				log.Err(err).
 					Msg("failed decoding command")
+
+				if err := cons.Nack(); err != nil {
+					log.Err(err).
+						Msg("failed to nack")
+				}
 
 				respondError(log, enc, errDecodingCmd.Error())
 
@@ -180,7 +204,11 @@ func subscribe(broker brokerer) http.HandlerFunc {
 					Msg("initialising consumer")
 
 				msg, err := getNext(ctx, cons)
-				if err != nil {
+				if errors.Is(err, errRequestCancelled) {
+					log.Debug().Msg("request context cancelled while waiting for next message")
+
+					return
+				} else if err != nil {
 					log.Err(err).Msg("failed to get next value for topic")
 					respondError(log, enc, errNextValue.Error())
 
@@ -205,7 +233,11 @@ func subscribe(broker brokerer) http.HandlerFunc {
 				}
 
 				msg, err := getNext(ctx, cons)
-				if err != nil {
+				if errors.Is(err, errRequestCancelled) {
+					log.Debug().Msg("request context cancelled while waiting for next message")
+
+					return
+				} else if err != nil {
 					log.Err(err).Msg("failed to get next value for topic")
 					respondError(log, enc, errNextValue.Error())
 

@@ -21,7 +21,7 @@ import (
 
 const defaultTopic = "test_topic"
 
-func TestPublish_SingleMessage(t *testing.T) {
+func TestPublishSingleMessage(t *testing.T) {
 	assert := assert.New(t)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -40,7 +40,7 @@ func TestPublish_SingleMessage(t *testing.T) {
 	assert.Equal(http.StatusOK, rec.Code)
 }
 
-func TestSubscribe_SingleMessage(t *testing.T) {
+func TestSubscribeSingleMessage(t *testing.T) {
 	assert := assert.New(t)
 
 	db, err := leveldb.Open(storage.NewMemStorage(), nil)
@@ -73,7 +73,7 @@ func TestSubscribe_SingleMessage(t *testing.T) {
 	assert.Equal(msg, out.Msg)
 }
 
-func TestSubscribe_Ack(t *testing.T) {
+func TestSubscribeAck(t *testing.T) {
 	assert := assert.New(t)
 
 	db, err := leveldb.Open(storage.NewMemStorage(), nil)
@@ -168,7 +168,47 @@ func TestServer(t *testing.T) {
 	assert.NoError(encoder.Encode(CmdAck))
 }
 
-func TestServer_MultiConsumer(t *testing.T) {
+func TestServerConnectionLost(t *testing.T) {
+	assert := assert.New(t)
+
+	srv, srvCloser := helperNewTestServer(t)
+	defer srvCloser()
+
+	// Publish twice
+	msg1 := "test_msg_1"
+	res := helperPublishMessage(t, srv, defaultTopic, msg1)
+	defer res.Body.Close()
+
+	msg2 := "test_msg_2"
+	res = helperPublishMessage(t, srv, defaultTopic, msg2)
+	defer res.Body.Close()
+
+	// Setup a subscriber
+	_, decoder, closeSub := helperSubscribeTopic(t, srv, defaultTopic)
+
+	// Consume message
+	var out subResponse
+	assert.NoError(decoder.Decode(&out))
+	assert.Equal(msg1, out.Msg)
+
+	// *Unexpectedly* close the connection
+	closeSub()
+
+	// We need to give it some time to Nack and be put back on the queue to
+	// consume
+	time.Sleep(100 * time.Millisecond)
+
+	// Setup a new subscriber
+	_, decoder, closeSub = helperSubscribeTopic(t, srv, defaultTopic)
+	defer closeSub()
+
+	// Expect the first message to be sent again as it was not acked
+	out = subResponse{}
+	assert.NoError(decoder.Decode(&out))
+	assert.Equal(msg1, out.Msg)
+}
+
+func TestServerMultiConsumer(t *testing.T) {
 	assert := assert.New(t)
 
 	srv, srvCloser := helperNewTestServer(t)
@@ -225,6 +265,49 @@ func TestServer_MultiConsumer(t *testing.T) {
 	var out4 subResponse
 	assert.NoError(decoder2.Decode(&out4))
 	assert.Equal(msg4, out4.Msg)
+}
+
+func TestServerMultiConsumerConnectionLost(t *testing.T) {
+	assert := assert.New(t)
+
+	srv, srvCloser := helperNewTestServer(t)
+	defer srvCloser()
+
+	// Publish once
+	msg1 := "test_msg_1"
+	res := helperPublishMessage(t, srv, defaultTopic, msg1)
+	defer res.Body.Close()
+
+	// Setup a subscriber
+	_, decoder1, closeSub1 := helperSubscribeTopic(t, srv, defaultTopic)
+
+	// Setup a second subscriber, which will be blocked until the message is
+	// Nacked due to the first subscriber disconnecting.
+	done := make(chan struct{})
+	go func() {
+		_, decoder2, closeSub2 := helperSubscribeTopic(t, srv, defaultTopic)
+		defer closeSub2()
+
+		// Expect the first message to be sent again as it was not acked
+		var out subResponse
+		assert.NoError(decoder2.Decode(&out))
+		assert.Equal(msg1, out.Msg)
+		done <- struct{}{}
+	}()
+
+	// Consume message
+	var out subResponse
+	assert.NoError(decoder1.Decode(&out))
+	assert.Equal(msg1, out.Msg)
+
+	// *Unexpectedly* close the connection
+	closeSub1()
+
+	select {
+	case <-time.After(time.Second):
+		assert.FailNow("timed out waiting for second decode")
+	case <-done:
+	}
 }
 
 // Benchmarking

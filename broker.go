@@ -17,18 +17,12 @@ func newBroker(store storer) *broker {
 }
 
 // Publish a message to a topic.
-func (b *broker) Publish(topicName string, value value) error {
-	if err := b.store.Insert(topicName, value); err != nil {
+func (b *broker) Publish(topic string, val value) error {
+	if err := b.store.Insert(topic, val); err != nil {
 		return err
 	}
 
-	// Notify the consumers of the topic of the new event
-	for _, c := range b.consumers[topicName] {
-		select {
-		case c.eventChan <- eventTypePublish:
-		default: // noop
-		}
-	}
+	b.NotifyConsumers(topic, eventTypePublish)
 
 	return nil
 }
@@ -40,6 +34,7 @@ func (b *broker) Subscribe(topic string) consumer {
 		topic:     topic,
 		store:     b.store,
 		eventChan: make(chan eventType),
+		notifier:  b,
 	}
 
 	b.consumers[topic] = append(b.consumers[topic], cons)
@@ -50,4 +45,14 @@ func (b *broker) Subscribe(topic string) consumer {
 // Shutdown the broker.
 func (b *broker) Shutdown() error {
 	return b.store.Close()
+}
+
+// NotifyConsumers notifies the consumers of a topic that an event has occurred.
+func (b *broker) NotifyConsumers(topic string, ev eventType) {
+	for _, c := range b.consumers[topic] {
+		select {
+		case c.eventChan <- ev:
+		default: // If there is noone listening noop
+		}
+	}
 }
