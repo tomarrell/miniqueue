@@ -42,7 +42,7 @@ func main() {
 			log.Printf("failed to publish: %v", err)
 			continue
 		}
-		if res.StatusCode != http.StatusOK {
+		if res.StatusCode != http.StatusCreated {
 			log.Printf("failed to publish, received status code: %d", res.StatusCode)
 		}
 
