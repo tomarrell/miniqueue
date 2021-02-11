@@ -159,14 +159,12 @@ func subscribe(broker brokerer) http.HandlerFunc {
 			var cmd string
 			err := dec.Decode(&cmd)
 			if err != nil {
-				if strings.Contains(err.Error(), "client disconnected") {
+				if strings.Contains(err.Error(), "client disconnected") ||
+					strings.Contains(err.Error(), "; CANCEL") {
 					log.Warn().Msg("client disconnected")
-
-					return
+				} else {
+					log.Err(err).Msg("failed decoding command")
 				}
-
-				log.Err(err).
-					Msg("failed decoding command")
 
 				if err := cons.Nack(); err != nil {
 					log.Err(err).
