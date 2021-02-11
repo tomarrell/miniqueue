@@ -29,7 +29,7 @@ published, nothing more.
 
 ## API
 
-- POST `/publish/:topic`, where the body contains the bytes to publish to the topic. 
+- POST `/publish/:topic`, where the body contains the bytes to publish to the topic.
 
   ```bash
   curl -X POST https://localhost:8080/publish/foo --data "helloworld"
@@ -111,12 +111,12 @@ salt. However, for those curious:
 λ go-wrk -c 12 -d 10 -M POST -body "helloworld" https://localhost:8080/publish/test
 Running 10s test @ https://localhost:8080/publish/test
   12 goroutine(s) running concurrently
-136332 requests in 9.925893077s, 7.54MB read
-Requests/sec:           13734.99
-Transfer/sec:           777.96KB
-Avg Req Time:           873.681µs
-Fastest Request:        199.93µs
-Slowest Request:        137.636069ms
+142665 requests in 9.919498387s, 7.89MB read
+Requests/sec:           14382.28
+Transfer/sec:           814.62KB
+Avg Req Time:           834.36µs
+Fastest Request:        190µs
+Slowest Request:        141.091118ms
 Number of Errors:       0
 ```
 

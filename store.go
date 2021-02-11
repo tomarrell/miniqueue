@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 
 	"github.com/rs/zerolog/log"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -62,6 +63,7 @@ const (
 type store struct {
 	path string
 	db   *leveldb.DB
+	sync.Mutex
 }
 
 func newStore(dbPath string) storer {
@@ -79,6 +81,9 @@ func newStore(dbPath string) storer {
 // Ack will acknowledge the processing of a value, removing it from the topic
 // entirely.
 func (s *store) Ack(topic string, ackOffset int) error {
+	s.Lock()
+	defer s.Unlock()
+
 	// Delete the used value
 	key := fmt.Sprintf(ackTopicFmt, topic, ackOffset)
 	if err := s.db.Delete([]byte(key), nil); err != nil {
@@ -91,6 +96,9 @@ func (s *store) Ack(topic string, ackOffset int) error {
 // Nack will negatively acknowledge the value, on a given topic, returning it
 // to the front of the consumption queue.
 func (s *store) Nack(topic string, ackOffset int) error {
+	s.Lock()
+	defer s.Unlock()
+
 	ackKey := []byte(fmt.Sprintf(ackTopicFmt, topic, ackOffset))
 
 	tx, err := s.db.OpenTransaction()
@@ -136,6 +144,9 @@ func (s *store) Nack(topic string, ackOffset int) error {
 // store if it doesn't already exist. If it does, the record is placed at the
 // end of the queue.
 func (s *store) Insert(topic string, value value) error {
+	s.Lock()
+	defer s.Unlock()
+
 	headPosKey := []byte(fmt.Sprintf(headPosKeyFmt, topic))
 	tailPosKey := []byte(fmt.Sprintf(tailPosKeyFmt, topic))
 	ackTailPosKey := []byte(fmt.Sprintf(ackTailPosKeyFmt, topic))
@@ -190,6 +201,9 @@ func (s *store) Insert(topic string, value value) error {
 // GetNext retrieves the first record for a topic, incrementing the head
 // position of the main array and pushing the value onto the ack array.
 func (s *store) GetNext(topic string) (value, int, error) {
+	s.Lock()
+	defer s.Unlock()
+
 	headOffset, err := getPos(s.db, headPosKeyFmt, topic)
 	if err != nil {
 		return nil, 0, err
