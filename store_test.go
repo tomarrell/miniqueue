@@ -67,23 +67,27 @@ func TestGetNext(t *testing.T) {
 	assert.NoError(t, s.Insert(defaultTopic, []byte("test_value_2")))
 	assert.NoError(t, s.Insert(defaultTopic, []byte("test_value_3")))
 
-	val, _, err := s.GetNext(defaultTopic)
+	val, offset, err := s.GetNext(defaultTopic)
 	assert.NoError(t, err)
 	assert.Equal(t, "test_value_1", string(val))
+	assert.Equal(t, 0, offset)
 
-	val, _, err = s.GetNext(defaultTopic)
+	val, offset, err = s.GetNext(defaultTopic)
 	assert.NoError(t, err)
 	assert.Equal(t, "test_value_2", string(val))
+	assert.Equal(t, 1, offset)
 
 	assert.NoError(t, s.Insert(defaultTopic, []byte("test_value_4")))
 
-	val, _, err = s.GetNext(defaultTopic)
+	val, offset, err = s.GetNext(defaultTopic)
 	assert.NoError(t, err)
 	assert.Equal(t, "test_value_3", string(val))
+	assert.Equal(t, 2, offset)
 
-	val, _, err = s.GetNext(defaultTopic)
+	val, offset, err = s.GetNext(defaultTopic)
 	assert.NoError(t, err)
 	assert.Equal(t, "test_value_4", string(val))
+	assert.Equal(t, 3, offset)
 }
 
 func TestGetNext_TopicNotInitialised(t *testing.T) {
