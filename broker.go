@@ -1,6 +1,8 @@
 package main
 
 import (
+	"sync"
+
 	"github.com/rs/xid"
 )
 
@@ -9,6 +11,7 @@ type value = []byte
 type broker struct {
 	store     storer
 	consumers map[string][]consumer
+	sync.RWMutex
 }
 
 func newBroker(store storer) *broker {
@@ -31,6 +34,9 @@ func (b *broker) Publish(topic string, val value) error {
 
 // Subscribe to a topic and return a consumer for the topic.
 func (b *broker) Subscribe(topic string) *consumer {
+	b.Lock()
+	defer b.Unlock()
+
 	cons := consumer{
 		id:        xid.New().String(),
 		topic:     topic,
@@ -52,6 +58,9 @@ func (b *broker) Shutdown() error {
 // NotifyConsumers notifies a waiting consumer of a topic that an event has
 // occurred.
 func (b *broker) NotifyConsumer(topic string, ev eventType) {
+	b.RLock()
+	defer b.RUnlock()
+
 	for _, c := range b.consumers[topic] {
 		select {
 		case c.eventChan <- ev:
