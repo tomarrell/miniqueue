@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io/ioutil"
 	"net/http"
+	"strings"
 
 	"github.com/gorilla/mux"
 	"github.com/rs/xid"
@@ -158,6 +159,11 @@ func subscribe(broker brokerer) http.HandlerFunc {
 			var cmd string
 			err := dec.Decode(&cmd)
 			if err != nil {
+				if strings.Contains(err.Error(), "client disconnected") {
+					log.Warn().Msg("client disconnected")
+
+					return
+				}
 
 				log.Err(err).
 					Msg("failed decoding command")
