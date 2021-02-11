@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"testing"
 
 	gomock "github.com/golang/mock/gomock"
@@ -25,11 +26,13 @@ func TestConsumerNext(t *testing.T) {
 	b := newBroker(mockStore)
 	c := b.Subscribe(topic)
 
-	msg, err := c.Next()
+	msg, err := c.Next(context.Background())
 	assert.NoError(err)
 	assert.Equal(msg1, msg)
+	assert.Equal(c.ackOffset, 0)
 
-	msg, err = c.Next()
+	msg, err = c.Next(context.Background())
 	assert.NoError(err)
 	assert.Equal(msg2, msg)
+	assert.Equal(c.ackOffset, 1)
 }

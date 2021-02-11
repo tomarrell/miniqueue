@@ -1,6 +1,8 @@
 package main
 
-import "github.com/rs/xid"
+import (
+	"github.com/rs/xid"
+)
 
 type value = []byte
 
@@ -22,13 +24,13 @@ func (b *broker) Publish(topic string, val value) error {
 		return err
 	}
 
-	b.NotifyConsumers(topic, eventTypePublish)
+	b.NotifyConsumer(topic, eventTypePublish)
 
 	return nil
 }
 
 // Subscribe to a topic and return a consumer for the topic.
-func (b *broker) Subscribe(topic string) consumer {
+func (b *broker) Subscribe(topic string) *consumer {
 	cons := consumer{
 		id:        xid.New().String(),
 		topic:     topic,
@@ -39,7 +41,7 @@ func (b *broker) Subscribe(topic string) consumer {
 
 	b.consumers[topic] = append(b.consumers[topic], cons)
 
-	return cons
+	return &cons
 }
 
 // Shutdown the broker.
@@ -47,11 +49,13 @@ func (b *broker) Shutdown() error {
 	return b.store.Close()
 }
 
-// NotifyConsumers notifies the consumers of a topic that an event has occurred.
-func (b *broker) NotifyConsumers(topic string, ev eventType) {
+// NotifyConsumers notifies a waiting consumer of a topic that an event has
+// occurred.
+func (b *broker) NotifyConsumer(topic string, ev eventType) {
 	for _, c := range b.consumers[topic] {
 		select {
 		case c.eventChan <- ev:
+			return
 		default: // If there is noone listening noop
 		}
 	}

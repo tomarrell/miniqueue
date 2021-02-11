@@ -47,10 +47,10 @@ func (mr *MockbrokererMockRecorder) Publish(topic, value interface{}) *gomock.Ca
 }
 
 // Subscribe mocks base method
-func (m *Mockbrokerer) Subscribe(topic string) consumer {
+func (m *Mockbrokerer) Subscribe(topic string) *consumer {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Subscribe", topic)
-	ret0, _ := ret[0].(consumer)
+	ret0, _ := ret[0].(*consumer)
 	return ret0
 }
 

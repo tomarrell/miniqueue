@@ -1,6 +1,10 @@
 package main
 
-import "fmt"
+import (
+	"context"
+	"errors"
+	"fmt"
+)
 
 const (
 	eventTypePublish = eventType("publish")
@@ -10,7 +14,7 @@ const (
 type eventType string
 
 type notifier interface {
-	NotifyConsumers(topic string, ev eventType)
+	NotifyConsumer(topic string, ev eventType)
 }
 
 // consumer handles providing values iteratively to a single consumer.
@@ -23,11 +27,21 @@ type consumer struct {
 	notifier  notifier
 }
 
-// Next requests the next value in the series.
-func (c *consumer) Next() (val value, err error) {
+// Next will attempt to retrieve the next value on the topic, or it will
+// block waiting for a msg indicating there is a new value available.
+func (c *consumer) Next(ctx context.Context) (val value, err error) {
 	val, ao, err := c.store.GetNext(c.topic)
+	if errors.Is(err, errTopicEmpty) {
+		select {
+		case <-c.eventChan:
+		case <-ctx.Done():
+			return nil, errRequestCancelled
+		}
+
+		return c.Next(ctx)
+	}
 	if err != nil {
-		return nil, fmt.Errorf("getting next from store: %w", err)
+		return nil, fmt.Errorf("getting next from store: %v", err)
 	}
 
 	c.ackOffset = ao
@@ -51,7 +65,7 @@ func (c *consumer) Nack() error {
 		return fmt.Errorf("nacking topic %s with offset %d: %v", c.topic, c.ackOffset, err)
 	}
 
-	c.notifier.NotifyConsumers(c.topic, eventTypeNack)
+	c.notifier.NotifyConsumer(c.topic, eventTypeNack)
 
 	return nil
 }

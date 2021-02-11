@@ -2,11 +2,8 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"io/ioutil"
 	"net/http"
 
@@ -39,7 +36,7 @@ const (
 
 type brokerer interface {
 	Publish(topic string, value value) error
-	Subscribe(topic string) consumer
+	Subscribe(topic string) *consumer
 }
 
 type server struct {
@@ -158,29 +155,10 @@ func subscribe(broker brokerer) http.HandlerFunc {
 		for {
 			log := log
 
-			select {
-			case <-ctx.Done():
-				if err := cons.Nack(); err != nil {
-					log.Err(err).
-						Msg("failed to nack")
-				}
-
-				return
-			default:
-			}
-
 			var cmd string
-			if err := dec.Decode(&cmd); errors.Is(err, io.EOF) {
-				log.Warn().
-					Msg("connection ending with EOF")
+			err := dec.Decode(&cmd)
+			if err != nil {
 
-				if err := cons.Nack(); err != nil {
-					log.Err(err).
-						Msg("failed to nack")
-				}
-
-				return
-			} else if err != nil {
 				log.Err(err).
 					Msg("failed decoding command")
 
@@ -189,6 +167,7 @@ func subscribe(broker brokerer) http.HandlerFunc {
 						Msg("failed to nack")
 				}
 
+				w.WriteHeader(http.StatusInternalServerError)
 				respondError(log, enc, errDecodingCmd.Error())
 
 				return
@@ -203,7 +182,7 @@ func subscribe(broker brokerer) http.HandlerFunc {
 				log.Debug().
 					Msg("initialising consumer")
 
-				msg, err := getNext(ctx, cons)
+				msg, err := cons.Next(ctx)
 				if errors.Is(err, errRequestCancelled) {
 					log.Debug().Msg("request context cancelled while waiting for next message")
 
@@ -227,12 +206,13 @@ func subscribe(broker brokerer) http.HandlerFunc {
 
 				if err := cons.Ack(); err != nil {
 					log.Err(err).Msg("failed to ACK")
+					w.WriteHeader(http.StatusInternalServerError)
 					respondError(log, enc, errAck.Error())
 
 					return
 				}
 
-				msg, err := getNext(ctx, cons)
+				msg, err := cons.Next(ctx)
 				if errors.Is(err, errRequestCancelled) {
 					log.Debug().Msg("request context cancelled while waiting for next message")
 
@@ -258,31 +238,6 @@ func subscribe(broker brokerer) http.HandlerFunc {
 			}
 		}
 	}
-}
-
-// getNext will attempt to retrieve the next value on the topic, or it will
-// block waiting for a msg indicating there is a new value available.
-func getNext(ctx context.Context, cons consumer) (msg value, err error) {
-	m, err := cons.Next()
-	if errors.Is(err, errTopicEmpty) {
-		select {
-		case <-cons.eventChan:
-		case <-ctx.Done():
-			return nil, errRequestCancelled
-		}
-
-		m, err := cons.Next()
-		if err != nil {
-			return nil, fmt.Errorf("getting next from consumer: %v", err)
-		}
-
-		return m, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("getting next from consumer: %v", err)
-	}
-
-	return m, nil
 }
 
 type subResponse struct {

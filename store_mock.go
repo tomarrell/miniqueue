@@ -115,18 +115,3 @@ func (mr *MockstorerMockRecorder) Destroy() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Destroy", reflect.TypeOf((*Mockstorer)(nil).Destroy))
 }
-
-// getOffset mocks base method
-func (m *Mockstorer) getOffset(topic string, offset int64) (value, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "getOffset", topic, offset)
-	ret0, _ := ret[0].(value)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// getOffset indicates an expected call of getOffset
-func (mr *MockstorerMockRecorder) getOffset(topic, offset interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getOffset", reflect.TypeOf((*Mockstorer)(nil).getOffset), topic, offset)
-}

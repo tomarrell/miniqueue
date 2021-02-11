@@ -37,5 +37,5 @@ func TestBrokerSubscribe(t *testing.T) {
 	b := newBroker(mockStore)
 	c := b.Subscribe(topic)
 
-	assert.IsType(t, consumer{}, c)
+	assert.IsType(t, &consumer{}, c)
 }
