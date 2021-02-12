@@ -22,6 +22,9 @@ const (
 	// CmdAck notifies the server that the outstanding message was processed
 	// successfully and can be removed from the queue.
 	CmdAck = "ACK"
+	// CmdNack notifies the server that the outstanding message was processed
+	// unsuccessfully and should be prepended to the queue to be processed again.
+	CmdNack = "NACK"
 )
 
 const (
@@ -30,6 +33,7 @@ const (
 	errPublish           = serverError("error publishing to broker")
 	errNextValue         = serverError("error getting next value for consumer")
 	errAck               = serverError("error ACKing message")
+	errNack              = serverError("error NACKing message")
 	errDecodingCmd       = serverError("error decoding command")
 	errRequestCancelled  = serverError("request context cancelled")
 )
@@ -199,6 +203,35 @@ func subscribe(broker brokerer) http.HandlerFunc {
 				if err := cons.Ack(); err != nil {
 					log.Err(err).Msg("failed to ACK")
 					respondError(log, enc, errAck.Error())
+
+					return
+				}
+
+				msg, err := cons.Next(ctx)
+				switch {
+				case errors.Is(err, errRequestCancelled):
+					log.Info().Msg("client disconnected while waiting for message")
+
+					return
+				case err != nil:
+					log.Err(err).Msg("failed to get next value for topic")
+					respondError(log, enc, errNextValue.Error())
+
+					return
+				default:
+					respondMsg(log, enc, msg)
+
+					log.Debug().
+						Str("msg", string(msg)).
+						Msg("written message to client")
+				}
+
+			case CmdNack:
+				log.Debug().Msg("NACKing message")
+
+				if err := cons.Nack(); err != nil {
+					log.Err(err).Msg("failed to NACK")
+					respondError(log, enc, errNack.Error())
 
 					return
 				}

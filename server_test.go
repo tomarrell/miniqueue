@@ -127,7 +127,7 @@ func TestSubscribeAck(t *testing.T) {
 	assert.Equal(msg2, out.Msg)
 }
 
-func TestServer(t *testing.T) {
+func TestServerPublishSubscribeAck(t *testing.T) {
 	assert := assert.New(t)
 
 	srv, srvCloser := helperNewTestServer(t)
@@ -166,6 +166,32 @@ func TestServer(t *testing.T) {
 
 	// Send back and ACK
 	assert.NoError(encoder.Encode(CmdAck))
+}
+
+func TestServerNack(t *testing.T) {
+	assert := assert.New(t)
+
+	srv, srvCloser := helperNewTestServer(t)
+	defer srvCloser()
+
+	// Publish twice
+	msg1 := "test_msg_1"
+	res := helperPublishMessage(t, srv, defaultTopic, msg1)
+	defer res.Body.Close()
+
+	// Setup a subscriber
+	enc, decoder, _ := helperSubscribeTopic(t, srv, defaultTopic)
+
+	// Consume message
+	var out subResponse
+	assert.NoError(decoder.Decode(&out))
+	assert.Equal(msg1, out.Msg)
+
+	assert.NoError(enc.Encode("NACK"))
+
+	// Consume message
+	assert.NoError(decoder.Decode(&out))
+	assert.Equal(msg1, out.Msg)
 }
 
 func TestServerConnectionLost(t *testing.T) {
