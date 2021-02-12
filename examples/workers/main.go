@@ -2,25 +2,36 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"log"
 	"math/rand"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
-
-	"github.com/rs/xid"
 )
 
 var (
-	url           = "https://localhost:8080"
-	topic         = "test_topic"
-	publishPeriod = time.Second
+	url   = "https://localhost:8080"
+	topic = "test_topic"
+
+	consumers    = flag.Int("consumers", 2, "number of consumers (minimum 1)")
+	pubRate      = flag.Duration("rate", time.Second, "the default rate at which to publish")
+	maxSleepTime = flag.Int("sleep", 5, "upper bound for consumer random sleep seconds")
+	validate     = flag.Bool("validate", false, "run in validation mode, check for pub/sub consistency, must be run with only 1 consumer")
+	nackChance   = flag.Int("chance", 10, "1/n change to randomly send back a nack")
 )
 
 func main() {
+	flag.Parse()
+
+	if *validate && *consumers > 1 {
+		log.Fatal("validate can currently only be run with a single consumer")
+	}
+
 	log.SetFlags(0)
 
 	go producer()
@@ -28,15 +39,17 @@ func main() {
 	// Give the producer time to create the topic
 	time.Sleep(time.Second)
 
-	go consumer(1)
-	consumer(2)
+	for i := 0; i < *consumers-1; i++ {
+		go consumer(i)
+	}
+	consumer(*consumers - 1)
 }
 
 func producer() {
 	log := log.New(os.Stdout, "producer: ", 0)
 
-	for {
-		msg := xid.New().String()
+	for n := 0; ; n++ {
+		msg := fmt.Sprintf("%d", n)
 
 		res, err := http.Post(
 			fmt.Sprintf("%s/publish/%s", url, topic),
@@ -44,16 +57,16 @@ func producer() {
 			strings.NewReader(msg),
 		)
 		if err != nil {
-			log.Printf("failed to publish: %v", err)
+			log.Printf("failed to publish: %v\n", err)
 			continue
 		}
 		if res.StatusCode != http.StatusCreated {
-			log.Printf("failed to publish, received status code: %d", res.StatusCode)
+			log.Printf("failed to publish, received status code: %d\n", res.StatusCode)
 		}
 
-		log.Printf("published message %s to topic %s\n", msg, topic)
+		log.Printf("published message %s\n", msg)
 
-		time.Sleep(publishPeriod)
+		time.Sleep(*pubRate)
 	}
 }
 
@@ -83,9 +96,8 @@ restart:
 
 		dec := json.NewDecoder(res.Body)
 
+		n := 0
 		for {
-			time.Sleep(publishPeriod)
-
 			var out subRes
 			if _ = dec.Decode(&out); err != nil {
 				log.Printf("failed decode response body: %v\n", err)
@@ -100,11 +112,30 @@ restart:
 				continue restart
 			}
 
-			time.Sleep(time.Duration(rand.Intn(5)) * time.Second)
+			log.Printf("consumed message: %s\n", out.Msg)
+
+			if !*validate {
+				t := time.Duration(rand.Intn(5)) * time.Second
+				log.Println("doing some work for", t)
+				time.Sleep(t)
+			}
+
+			if *validate {
+				c, _ := strconv.Atoi(out.Msg)
+				if c != n {
+					panic("uh oh")
+				}
+
+				// Randomly choose to ack or nack
+				if rand.Intn(*nackChance) == 0 {
+					_ = enc.Encode("NACK")
+					continue
+				}
+
+				n++
+			}
 
 			_ = enc.Encode("ACK")
-
-			log.Printf("consumed message: %s\n", out.Msg)
 		}
 	}
 }
