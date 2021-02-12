@@ -10,7 +10,6 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/rs/xid"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -34,6 +33,12 @@ const (
 	errDecodingCmd       = serverError("error decoding command")
 	errRequestCancelled  = serverError("request context cancelled")
 )
+
+type serverError string
+
+func (e serverError) Error() string {
+	return string(e)
+}
 
 type brokerer interface {
 	Publish(topic string, value value) error
@@ -70,8 +75,7 @@ func publish(broker brokerer) http.HandlerFunc {
 		vars := mux.Vars(r)
 		topic, ok := vars[topicVarKey]
 		if !ok {
-			log.Debug().
-				Msg("invalid topic in path")
+			log.Debug().Msg("invalid topic in path")
 
 			w.WriteHeader(http.StatusBadRequest)
 			respondError(log, json.NewEncoder(w), errInvalidTopicValue.Error())
@@ -83,14 +87,11 @@ func publish(broker brokerer) http.HandlerFunc {
 			Str("topic", topic).
 			Logger()
 
-		log.Info().
-			Msg("publishing to topic")
+		log.Info().Msg("publishing to topic")
 
-		// Read body
 		b, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			log.Err(err).
-				Msg("failed reading request body")
+			log.Err(err).Msg("failed reading request body")
 
 			w.WriteHeader(http.StatusInternalServerError)
 			respondError(log, json.NewEncoder(w), errReadBody.Error())
@@ -99,10 +100,8 @@ func publish(broker brokerer) http.HandlerFunc {
 		}
 		defer r.Body.Close()
 
-		// Call broker to publish to topic
 		if err := broker.Publish(topic, b); err != nil {
-			log.Err(err).
-				Msg("failed to publish to broker")
+			log.Err(err).Msg("failed to publish to broker")
 
 			w.WriteHeader(http.StatusInternalServerError)
 			respondError(log, json.NewEncoder(w), errPublish.Error())
@@ -131,8 +130,7 @@ func subscribe(broker brokerer) http.HandlerFunc {
 		vars := mux.Vars(r)
 		topic, ok := vars[topicVarKey]
 		if !ok {
-			log.Debug().
-				Msg("invalid topic in path")
+			log.Debug().Msg("invalid topic in path")
 
 			w.WriteHeader(http.StatusBadRequest)
 			respondError(log, json.NewEncoder(w), errInvalidTopicValue.Error())
@@ -140,9 +138,7 @@ func subscribe(broker brokerer) http.HandlerFunc {
 			return
 		}
 
-		log = log.With().
-			Str("topic", topic).
-			Logger()
+		log = log.With().Str("topic", topic).Logger()
 
 		log.Info().
 			Msg("subscribing to topic")
@@ -157,86 +153,77 @@ func subscribe(broker brokerer) http.HandlerFunc {
 			log := log
 
 			var cmd string
-			err := dec.Decode(&cmd)
-			if err != nil {
-				if strings.Contains(err.Error(), "client disconnected") ||
-					strings.Contains(err.Error(), "; CANCEL") {
-					log.Warn().Msg("client disconnected")
-				} else {
-					log.Err(err).Msg("failed decoding command")
-				}
+			if err := dec.Decode(&cmd); isDisconnect(err) {
+				log.Warn().Msg("client disconnected")
 
 				if err := cons.Nack(); err != nil {
-					log.Err(err).
-						Msg("failed to nack")
+					log.Err(err).Msg("failed to nack")
 				}
 
-				w.WriteHeader(http.StatusInternalServerError)
+				return
+			} else if err != nil {
+				log.Err(err).Msg("failed decoding command")
 				respondError(log, enc, errDecodingCmd.Error())
 
 				return
 			}
 
-			log = log.With().
-				Str("cmd", cmd).
-				Logger()
+			log = log.With().Str("cmd", cmd).Logger()
 
 			switch cmd {
 			case CmdInit:
-				log.Debug().
-					Msg("initialising consumer")
+				log.Debug().Msg("initialising consumer")
 
 				msg, err := cons.Next(ctx)
-				if errors.Is(err, errRequestCancelled) {
-					log.Debug().Msg("request context cancelled while waiting for next message")
+				switch {
+				case errors.Is(err, errRequestCancelled):
+					log.Info().Msg("client disconnected while waiting for message")
 
 					return
-				} else if err != nil {
+				case err != nil:
 					log.Err(err).Msg("failed to get next value for topic")
 					respondError(log, enc, errNextValue.Error())
 
 					return
+				default:
+					respondMsg(log, enc, msg)
+
+					log.Debug().
+						Str("msg", string(msg)).
+						Msg("written message to client")
 				}
 
-				respondMsg(log, enc, msg)
-
-				log.Debug().
-					Str("msg", string(msg)).
-					Msg("written message to client")
-
 			case CmdAck:
-				log.Debug().
-					Msg("ACKing message")
+				log.Debug().Msg("ACKing message")
 
 				if err := cons.Ack(); err != nil {
 					log.Err(err).Msg("failed to ACK")
-					w.WriteHeader(http.StatusInternalServerError)
 					respondError(log, enc, errAck.Error())
 
 					return
 				}
 
 				msg, err := cons.Next(ctx)
-				if errors.Is(err, errRequestCancelled) {
-					log.Debug().Msg("request context cancelled while waiting for next message")
+				switch {
+				case errors.Is(err, errRequestCancelled):
+					log.Info().Msg("client disconnected while waiting for message")
 
 					return
-				} else if err != nil {
+				case err != nil:
 					log.Err(err).Msg("failed to get next value for topic")
 					respondError(log, enc, errNextValue.Error())
 
 					return
+				default:
+					respondMsg(log, enc, msg)
+
+					log.Debug().
+						Str("msg", string(msg)).
+						Msg("written message to client")
 				}
 
-				respondMsg(log, enc, msg)
-
-				log.Debug().
-					Str("msg", string(msg)).
-					Msg("written message to client")
-
 			default:
-				log.Warn().
-					Msg("unrecognised command received")
+				log.Warn().Msg("unrecognised command received")
 
 				respondError(log, enc, "unrecognised command received")
 			}
@@ -244,31 +231,7 @@ func subscribe(broker brokerer) http.HandlerFunc {
 	}
 }
 
-type subResponse struct {
-	Msg   string `json:"msg,omitempty"`
-	Error string `json:"error,omitempty"`
-}
-
-func respondMsg(log zerolog.Logger, e *json.Encoder, msg []byte) {
-	if err := e.Encode(subResponse{
-		Msg: string(msg),
-	}); err != nil {
-		log.Err(err).
-			Msg("failed to write response to client")
-	}
-}
-
-func respondError(log zerolog.Logger, e *json.Encoder, errMsg string) {
-	if err := e.Encode(subResponse{
-		Error: errMsg,
-	}); err != nil {
-		log.Err(err).
-			Msg("writing response to client")
-	}
-}
-
-type serverError string
-
-func (e serverError) Error() string {
-	return string(e)
+func isDisconnect(err error) bool {
+	return err != nil && (strings.Contains(err.Error(), "client disconnected") ||
+		strings.Contains(err.Error(), "; CANCEL"))
 }
