@@ -107,7 +107,8 @@ Available commands are:
 As MiniQueue is still under development, take these benchmarks with a grain of
 salt. However, for those curious:
 
-```
+**Publish**
+```bash
 λ go-wrk -c 12 -d 10 -M POST -body "helloworld" https://localhost:8080/publish/test
 Running 10s test @ https://localhost:8080/publish/test
   12 goroutine(s) running concurrently
@@ -118,6 +119,13 @@ Avg Req Time:           834.36µs
 Fastest Request:        190µs
 Slowest Request:        141.091118ms
 Number of Errors:       0
+```
+
+**Consume + Ack**
+```bash
+λ ./bench_consume -duration=10s
+consumed 42982 times in 10s
+4298 (consume+ack)/second
 ```
 
 Running on my MacBook Pro (15-inch, 2019), with a 2.6 GHz 6-Core Intel Core i7.
