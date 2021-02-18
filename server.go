@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/rs/xid"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -22,8 +24,9 @@ const (
 	// CmdAck notifies the server that the outstanding message was processed
 	// successfully and can be removed from the queue.
 	CmdAck = "ACK"
-	// CmdNack notifies the server that the outstanding message was processed
-	// unsuccessfully and should be prepended to the queue to be processed again.
+	// CmdNack notifies the server that the outstanding message was not processed
+	// successfully and should be prepended to the queue to be processed again as
+	// soon as possible.
 	CmdNack = "NACK"
 )
 
@@ -177,25 +180,7 @@ func subscribe(broker brokerer) http.HandlerFunc {
 			switch cmd {
 			case CmdInit:
 				log.Debug().Msg("initialising consumer")
-
-				msg, err := cons.Next(ctx)
-				switch {
-				case errors.Is(err, errRequestCancelled):
-					log.Info().Msg("client disconnected while waiting for message")
-
-					return
-				case err != nil:
-					log.Err(err).Msg("failed to get next value for topic")
-					respondError(log, enc, errNextValue.Error())
-
-					return
-				default:
-					respondMsg(log, enc, msg)
-
-					log.Debug().
-						Str("msg", string(msg)).
-						Msg("written message to client")
-				}
+				handleConsumerNext(ctx, log, enc, cons)
 
 			case CmdAck:
 				log.Debug().Msg("ACKing message")
@@ -207,24 +192,7 @@ func subscribe(broker brokerer) http.HandlerFunc {
 					return
 				}
 
-				msg, err := cons.Next(ctx)
-				switch {
-				case errors.Is(err, errRequestCancelled):
-					log.Info().Msg("client disconnected while waiting for message")
-
-					return
-				case err != nil:
-					log.Err(err).Msg("failed to get next value for topic")
-					respondError(log, enc, errNextValue.Error())
-
-					return
-				default:
-					respondMsg(log, enc, msg)
-
-					log.Debug().
-						Str("msg", string(msg)).
-						Msg("written message to client")
-				}
+				handleConsumerNext(ctx, log, enc, cons)
 
 			case CmdNack:
 				log.Debug().Msg("NACKing message")
@@ -236,24 +204,7 @@ func subscribe(broker brokerer) http.HandlerFunc {
 					return
 				}
 
-				msg, err := cons.Next(ctx)
-				switch {
-				case errors.Is(err, errRequestCancelled):
-					log.Info().Msg("client disconnected while waiting for message")
-
-					return
-				case err != nil:
-					log.Err(err).Msg("failed to get next value for topic")
-					respondError(log, enc, errNextValue.Error())
-
-					return
-				default:
-					respondMsg(log, enc, msg)
-
-					log.Debug().
-						Str("msg", string(msg)).
-						Msg("written message to client")
-				}
+				handleConsumerNext(ctx, log, enc, cons)
 
 			default:
 				log.Warn().Msg("unrecognised command received")
@@ -261,6 +212,29 @@ func subscribe(broker brokerer) http.HandlerFunc {
 				respondError(log, enc, "unrecognised command received")
 			}
 		}
+	}
+}
+
+// handleConsumerNext attempts to retrieve the next value from the consumer,
+// handling any errors that may occur and responding to the client accordingly.
+func handleConsumerNext(ctx context.Context, log zerolog.Logger, enc *json.Encoder, cons *consumer) {
+	msg, err := cons.Next(ctx)
+	switch {
+	case errors.Is(err, errRequestCancelled):
+		log.Info().Msg("client disconnected while waiting for message")
+
+		return
+	case err != nil:
+		log.Err(err).Msg("failed to get next value for topic")
+		respondError(log, enc, errNextValue.Error())
+
+		return
+	default:
+		respondMsg(log, enc, msg)
+
+		log.Debug().
+			Str("msg", string(msg)).
+			Msg("written message to client")
 	}
 }
 
