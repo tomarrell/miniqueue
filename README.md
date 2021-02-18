@@ -99,8 +99,14 @@ Available commands are:
 - `"ACK"`: Acknowledges the current message, popping it from the topic and
     removing it.
 
-- `"NACK"`: Negatively acknowledges the current message, causing it to be put back
-    to the front of the queue, ready for other consumers.
+- `"NACK"`: Negatively acknowledges the current message, causing it to be
+    returned to the *front* of the queue. If there is a ready consumer waiting
+    for a message, it will immediately be delivered to this consumer. Otherwise
+    it will be delivered as as one becomes available.
+
+- `"BACK"`: Negatively acknowledges the current message, causing it to be
+    returned to the *back* of the queue. This will cause it to be processed
+    again after the currently waiting messages.
 
 ## Benchmarks
 
