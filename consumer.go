@@ -7,11 +7,12 @@ import (
 )
 
 const (
-	eventTypePublish = eventType("publish")
-	eventTypeNack    = eventType("nack")
+	eventTypePublish eventType = iota
+	eventTypeNack
+	eventTypeBack
 )
 
-type eventType string
+type eventType int
 
 type notifier interface {
 	NotifyConsumer(topic string, ev eventType)
@@ -66,6 +67,18 @@ func (c *consumer) Nack() error {
 	}
 
 	c.notifier.NotifyConsumer(c.topic, eventTypeNack)
+
+	return nil
+}
+
+// Back negatively acknowleges a message, returning it to the back of the queue
+// for consumption.
+func (c *consumer) Back() error {
+	if err := c.store.Back(c.topic, c.ackOffset); err != nil {
+		return fmt.Errorf("nacking topic %s with offset %d: %v", c.topic, c.ackOffset, err)
+	}
+
+	c.notifier.NotifyConsumer(c.topic, eventTypeBack)
 
 	return nil
 }

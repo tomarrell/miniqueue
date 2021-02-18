@@ -28,6 +28,11 @@ const (
 	// successfully and should be prepended to the queue to be processed again as
 	// soon as possible.
 	CmdNack = "NACK"
+	// CmdBack notifies the server that the outstanding message was not processed
+	// successfully and should be appended to the back of the queue to be
+	// processed again after all the currently outstanding messages have been
+	// processed.
+	CmdBack = "BACK"
 )
 
 const (
@@ -37,6 +42,7 @@ const (
 	errNextValue         = serverError("error getting next value for consumer")
 	errAck               = serverError("error ACKing message")
 	errNack              = serverError("error NACKing message")
+	errBack              = serverError("error BACKing message")
 	errDecodingCmd       = serverError("error decoding command")
 	errRequestCancelled  = serverError("request context cancelled")
 )
@@ -180,6 +186,7 @@ func subscribe(broker brokerer) http.HandlerFunc {
 			switch cmd {
 			case CmdInit:
 				log.Debug().Msg("initialising consumer")
+
 				handleConsumerNext(ctx, log, enc, cons)
 
 			case CmdAck:
@@ -200,6 +207,18 @@ func subscribe(broker brokerer) http.HandlerFunc {
 				if err := cons.Nack(); err != nil {
 					log.Err(err).Msg("failed to NACK")
 					respondError(log, enc, errNack.Error())
+
+					return
+				}
+
+				handleConsumerNext(ctx, log, enc, cons)
+
+			case CmdBack:
+				log.Debug().Msg("BACKing message")
+
+				if err := cons.Back(); err != nil {
+					log.Err(err).Msg("failed to BACK")
+					respondError(log, enc, errBack.Error())
 
 					return
 				}

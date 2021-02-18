@@ -90,6 +90,20 @@ func (mr *MockstorerMockRecorder) Nack(topic, ackOffset interface{}) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Nack", reflect.TypeOf((*Mockstorer)(nil).Nack), topic, ackOffset)
 }
 
+// Back mocks base method
+func (m *Mockstorer) Back(topic string, ackOffset int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Back", topic, ackOffset)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Back indicates an expected call of Back
+func (mr *MockstorerMockRecorder) Back(topic, ackOffset interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Back", reflect.TypeOf((*Mockstorer)(nil).Back), topic, ackOffset)
+}
+
 // Close mocks base method
 func (m *Mockstorer) Close() error {
 	m.ctrl.T.Helper()

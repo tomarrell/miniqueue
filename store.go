@@ -26,9 +26,13 @@ type storer interface {
 	// entirely.
 	Ack(topic string, ackOffset int) error
 
-	// Nack will negatively acknowledge the value, on a given topic, returning it
-	// to the front of the consumption queue.
+	// Nack will negatively acknowledge the value on a given topic, returning it
+	// to the *front* of the consumption queue.
 	Nack(topic string, ackOffset int) error
+
+	// Back will negatively acknowledge the value on a given topic, returning it
+	// to the *back* of the consumption queue.
+	Back(topic string, ackOffset int) error
 
 	// Close closes the store.
 	Close() error
@@ -39,9 +43,11 @@ type storer interface {
 }
 
 const (
-	errTopicEmpty     = storeError("topic is empty")
-	errTopicNotExist  = storeError("topic does not exist")
-	errAckMsgNotExist = storeError("msg to ack does not exist")
+	errTopicEmpty      = storeError("topic is empty")
+	errTopicNotExist   = storeError("topic does not exist")
+	errAckMsgNotExist  = storeError("msg to ack does not exist")
+	errNackMsgNotExist = storeError("msg to nack does not exist")
+	errBackMsgNotExist = storeError("msg to back does not exist")
 )
 
 type storeError string
@@ -99,21 +105,21 @@ func (s *store) Nack(topic string, ackOffset int) error {
 	s.Lock()
 	defer s.Unlock()
 
-	ackKey := []byte(fmt.Sprintf(ackTopicFmt, topic, ackOffset))
+	nackKey := []byte(fmt.Sprintf(ackTopicFmt, topic, ackOffset))
 
 	tx, err := s.db.OpenTransaction()
 	if err != nil {
 		return fmt.Errorf("opening transaction: %v", err)
 	}
 
-	exists, err := tx.Has(ackKey, nil)
+	exists, err := tx.Has(nackKey, nil)
 	if err != nil {
 		tx.Discard()
 		return fmt.Errorf("checking for has: %v", err)
 	}
 	if !exists {
 		tx.Discard()
-		return errAckMsgNotExist
+		return errNackMsgNotExist
 	}
 
 	val, err := getOffsetTx(tx, ackTopicFmt, topic, ackOffset)
@@ -127,9 +133,56 @@ func (s *store) Nack(topic string, ackOffset int) error {
 		return fmt.Errorf("prepending value to topic %s: %v", topic, err)
 	}
 
-	if err := tx.Delete(ackKey, nil); err != nil {
+	if err := tx.Delete(nackKey, nil); err != nil {
 		tx.Discard()
-		return fmt.Errorf("deleting ackKey %s: %v", ackKey, err)
+		return fmt.Errorf("deleting ackKey %s: %v", nackKey, err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		tx.Discard()
+		return fmt.Errorf("committing nack transaction: %v", err)
+	}
+
+	return nil
+}
+
+// Back will negatively acknowledge the value, on a given topic, returning it
+// to the back of the consumption queue.
+func (s *store) Back(topic string, ackOffset int) error {
+	s.Lock()
+	defer s.Unlock()
+
+	backKey := []byte(fmt.Sprintf(ackTopicFmt, topic, ackOffset))
+
+	tx, err := s.db.OpenTransaction()
+	if err != nil {
+		return fmt.Errorf("opening transaction: %v", err)
+	}
+
+	exists, err := tx.Has(backKey, nil)
+	if err != nil {
+		tx.Discard()
+		return fmt.Errorf("checking for has: %v", err)
+	}
+	if !exists {
+		tx.Discard()
+		return errBackMsgNotExist
+	}
+
+	val, err := getOffsetTx(tx, ackTopicFmt, topic, ackOffset)
+	if err != nil {
+		tx.Discard()
+		return fmt.Errorf("getting ack msg from topic %s at offset %d: %v", topic, ackOffset, err)
+	}
+
+	if _, err := appendValueTx(tx, tailPosKeyFmt, topicFmt, topic, val); err != nil {
+		tx.Discard()
+		return fmt.Errorf("appending value to topic %s: %v", topic, err)
+	}
+
+	if err := tx.Delete(backKey, nil); err != nil {
+		tx.Discard()
+		return fmt.Errorf("deleting ackKey %s: %v", backKey, err)
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -343,6 +396,39 @@ func appendValue(db *leveldb.DB, tailPosKeyFmt, keyFmt, topic string, val value)
 	tail := make([]byte, 8)
 	binary.PutVarint(tail, origOffset+1)
 	if err := db.Put(tailPosKey, tail, nil); err != nil {
+		return 0, fmt.Errorf("putting new tail position: %v", err)
+	}
+
+	return int(origOffset), nil
+}
+
+// appendValueTx returns inserts a new value to the end of a topic given,
+// returning the inserted offset.
+func appendValueTx(tx *leveldb.Transaction, tailPosKeyFmt, keyFmt, topic string, val value) (offset int, err error) {
+	tailPosKey := []byte(fmt.Sprintf(tailPosKeyFmt, topic))
+
+	// Fetch the current tail position
+	tailPosVal, err := tx.Get(tailPosKey, nil)
+	if err != nil {
+		return 0, fmt.Errorf("getting tail position from db: %v", err)
+	}
+
+	origOffset, err := binary.ReadVarint(bytes.NewReader(tailPosVal))
+	if err != nil {
+		return 0, fmt.Errorf("reading tail pos varint: %v", err)
+	}
+
+	// Write new record to next tail position
+	newKey := []byte(fmt.Sprintf(keyFmt, topic, origOffset))
+
+	if err := tx.Put(newKey, val, nil); err != nil {
+		return 0, fmt.Errorf("putting value: %v", err)
+	}
+
+	// Update tail position
+	tail := make([]byte, 8)
+	binary.PutVarint(tail, origOffset+1)
+	if err := tx.Put(tailPosKey, tail, nil); err != nil {
 		return 0, fmt.Errorf("putting new tail position: %v", err)
 	}
 
