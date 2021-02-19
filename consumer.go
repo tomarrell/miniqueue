@@ -75,10 +75,18 @@ func (c *consumer) Nack() error {
 // for consumption.
 func (c *consumer) Back() error {
 	if err := c.store.Back(c.topic, c.ackOffset); err != nil {
-		return fmt.Errorf("nacking topic %s with offset %d: %v", c.topic, c.ackOffset, err)
+		return fmt.Errorf("backing topic %s with offset %d: %v", c.topic, c.ackOffset, err)
 	}
 
 	c.notifier.NotifyConsumer(c.topic, eventTypeBack)
+
+	return nil
+}
+
+func (c *consumer) Dack(delaySeconds int) error {
+	if err := c.store.Dack(c.topic, c.ackOffset, delaySeconds); err != nil {
+		return fmt.Errorf("dacking topic %s with offset %d and delay %ds: %v", c.topic, c.ackOffset, delaySeconds, err)
+	}
 
 	return nil
 }

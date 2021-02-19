@@ -4,7 +4,7 @@ go 1.15
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/golang/mock v1.4.4
+	github.com/golang/mock v1.4.4-0.20210128224731-b9a8584115bc
 	github.com/gorilla/mux v1.8.0
 	github.com/rs/xid v1.2.1
 	github.com/rs/zerolog v1.20.0

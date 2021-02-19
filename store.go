@@ -7,10 +7,15 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/iterator"
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 // storer should be safe for concurrent use.
@@ -22,17 +27,31 @@ type storer interface {
 	// allowing future acking/nacking of the value.
 	GetNext(topic string) (val value, ackOffset int, err error)
 
-	// Ack will acknowledge the processing of a value, removing it from the topic
-	// entirely.
+	// Ack will acknowledge the processing of a message, removing it from the
+	// topic entirely.
 	Ack(topic string, ackOffset int) error
 
-	// Nack will negatively acknowledge the value on a given topic, returning it
+	// Nack will negatively acknowledge the message on a given topic, returning it
 	// to the *front* of the consumption queue.
 	Nack(topic string, ackOffset int) error
 
-	// Back will negatively acknowledge the value on a given topic, returning it
+	// Back will negatively acknowledge the message on a given topic, returning it
 	// to the *back* of the consumption queue.
 	Back(topic string, ackOffset int) error
+
+	// Dack will negatively acknowledge the message on a given topic, placing on
+	// the delay queue with a given timestamp as part of the key for later
+	// retrieval.
+	Dack(topic string, ackOffset int, delaySeconds int) error
+
+	// GetDelayed returns an iterator and a closer function allowing the caller to
+	// iterate over the currently waiting messages for a given topic in
+	// chronological delay order (those with soonest "done" time first).
+	GetDelayed(topic string) (delayedIterator, func() error)
+
+	// ReturnDelayed returns delayed messages with done times before the given time
+	// back to the main queue.
+	ReturnDelayed(topic string, before time.Time) error
 
 	// Close closes the store.
 	Close() error
@@ -48,6 +67,7 @@ const (
 	errAckMsgNotExist  = storeError("msg to ack does not exist")
 	errNackMsgNotExist = storeError("msg to nack does not exist")
 	errBackMsgNotExist = storeError("msg to back does not exist")
+	errDackMsgNotExist = storeError("msg to dack does not exist")
 )
 
 type storeError string
@@ -57,12 +77,26 @@ func (s storeError) Error() string {
 }
 
 const (
-	topicFmt      = "%s-%d"
-	headPosKeyFmt = "%s-head"
-	tailPosKeyFmt = "%s-tail"
+	// The topic queue is the primary queue containing the records to be
+	// processed. We need to keep track of the head and the tail offsets of the
+	// queue in their respective keys in order to quickly append/pop messages from
+	// the queue.
+	topicFmt      = "%s-%d"   // topic: [topic]-[offset]
+	headPosKeyFmt = "%s-head" // key: [topic]-head
+	tailPosKeyFmt = "%s-tail" // key: [topic]-tail
 
-	ackTopicFmt      = "%s-ack-%d"
-	ackTailPosKeyFmt = "%s-ack-head"
+	// The ack topic queue is an auxillary queue which allows keeping track of
+	// outstanding messages which are waiting on a consumer acknowledgement
+	// command. We only ever append to the end of this queue, delete records once
+	// they have been ACK'ed or moved back to the primary queue for reprocessing.
+	ackTopicFmt      = "%s-ack-%d"   // topic: [topic]-ack-[offset]
+	ackTailPosKeyFmt = "%s-ack-tail" // key: [topic]-ack-tail
+
+	// The delay topic contains messages in buckets with their designated return
+	// time as a unix timestamp. This provides strict ordering, allowing iteration
+	// over the items in prefixed byte-order.
+	delayTopicPrefix = "%s-delay-"                // topic: [topic]-delay-
+	delayTopicFmt    = delayTopicPrefix + "%011d" // topic: [topic]-delay-[until_unix_timestamp]
 )
 
 // store handles the the underlying leveldb implementation.
@@ -128,7 +162,7 @@ func (s *store) Nack(topic string, ackOffset int) error {
 		return fmt.Errorf("getting ack msg from topic %s at offset %d: %v", topic, ackOffset, err)
 	}
 
-	if _, err := prependValueTx(tx, headPosKeyFmt, topicFmt, topic, val); err != nil {
+	if _, err := prependValueTx(tx, topicFmt, headPosKeyFmt, topic, val); err != nil {
 		tx.Discard()
 		return fmt.Errorf("prepending value to topic %s: %v", topic, err)
 	}
@@ -175,7 +209,7 @@ func (s *store) Back(topic string, ackOffset int) error {
 		return fmt.Errorf("getting ack msg from topic %s at offset %d: %v", topic, ackOffset, err)
 	}
 
-	if _, err := appendValueTx(tx, tailPosKeyFmt, topicFmt, topic, val); err != nil {
+	if _, err := appendValueTx(tx, topicFmt, tailPosKeyFmt, topic, val); err != nil {
 		tx.Discard()
 		return fmt.Errorf("appending value to topic %s: %v", topic, err)
 	}
@@ -187,7 +221,7 @@ func (s *store) Back(topic string, ackOffset int) error {
 
 	if err := tx.Commit(); err != nil {
 		tx.Discard()
-		return fmt.Errorf("committing nack transaction: %v", err)
+		return fmt.Errorf("committing back transaction: %v", err)
 	}
 
 	return nil
@@ -211,7 +245,7 @@ func (s *store) Insert(topic string, value value) error {
 
 	// The key already exists
 	if exists {
-		if _, err := appendValue(s.db, tailPosKeyFmt, topicFmt, topic, value); err != nil {
+		if _, err := appendValue(s.db, topicFmt, tailPosKeyFmt, topic, value); err != nil {
 			return err
 		}
 
@@ -267,7 +301,7 @@ func (s *store) GetNext(topic string) (value, int, error) {
 		return nil, 0, err
 	}
 
-	insertedOffset, err := appendValue(s.db, ackTailPosKeyFmt, ackTopicFmt, topic, val)
+	insertedOffset, err := appendValue(s.db, ackTopicFmt, ackTailPosKeyFmt, topic, val)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -279,6 +313,135 @@ func (s *store) GetNext(topic string) (value, int, error) {
 	return val, insertedOffset, nil
 }
 
+// Dack will negatively acknowledge the message on a given topic, placing on
+// the delay queue with a given timestamp as part of the key for later
+// retrieval.
+func (s *store) Dack(topic string, ackOffset int, delaySeconds int) error {
+	s.Lock()
+	defer s.Unlock()
+
+	dackKey := []byte(fmt.Sprintf(ackTopicFmt, topic, ackOffset))
+
+	tx, err := s.db.OpenTransaction()
+	if err != nil {
+		return fmt.Errorf("opening transaction: %v", err)
+	}
+
+	exists, err := tx.Has(dackKey, nil)
+	if err != nil {
+		tx.Discard()
+		return fmt.Errorf("checking for has: %v", err)
+	}
+	if !exists {
+		tx.Discard()
+		return errDackMsgNotExist
+	}
+
+	val, err := getOffsetTx(tx, ackTopicFmt, topic, ackOffset)
+	if err != nil {
+		tx.Discard()
+		return fmt.Errorf("getting ack msg from topic %s at offset %d: %v", topic, ackOffset, err)
+	}
+
+	if err := insertDelayTx(tx, topic, val, delaySeconds); err != nil {
+		tx.Discard()
+		return fmt.Errorf("inserting ack msg into delay topic from topic %s at offset %d: %v", topic, ackOffset, err)
+	}
+
+	if err := tx.Delete(dackKey, nil); err != nil {
+		tx.Discard()
+		return fmt.Errorf("deleting ackKey %s: %v", dackKey, err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		tx.Discard()
+		return fmt.Errorf("committing dack transaction: %v", err)
+	}
+
+	return nil
+}
+
+// Requires version of mockgen with https://github.com/golang/mock/pull/405 due
+// to exposing a bug in previous versions. Unfortunately for now-
+// $ go get github.com/golang/mock/mockgen@HEAD
+// until a new release made.
+type delayedIterator interface {
+	iterator.Iterator
+}
+
+// GetDelayed returns an iterator and a closer function allowing the caller to
+// iterate over the currently waiting messages for a given topic in
+// chronological delay order (those with soonest "done" time first).
+func (s *store) GetDelayed(topic string) (iterator delayedIterator, closer func() error) {
+	key := fmt.Sprintf(delayTopicPrefix, topic)
+	prefix := util.BytesPrefix([]byte(key))
+	iter := s.db.NewIterator(prefix, nil)
+
+	closer = func() error {
+		iter.Release()
+		return iter.Error()
+	}
+
+	return iter, closer
+}
+
+// ReturnDelayed returns delayed messages with done times before the given time
+// back to the main queue.
+func (s *store) ReturnDelayed(topic string, before time.Time) error {
+	key := fmt.Sprintf(delayTopicPrefix, topic)
+	prefix := util.BytesPrefix([]byte(key))
+	iter := s.db.NewIterator(prefix, nil)
+	defer iter.Release() // In case we return early, it is safe to call multiple times.
+
+	tx, err := s.db.OpenTransaction()
+	if err != nil {
+		return fmt.Errorf("opening transaction: %v", err)
+	}
+
+	// For each record, check if the timestamp is earlier than the given cutoff,
+	// returning the record to the front of the main queue if it is.
+	//
+	// TODO fix returned messages being in reverse chronological order
+	for iter.Next() {
+		key := iter.Key()
+		delayTime, err := timeFromDelayKey(string(key))
+		if err != nil {
+			tx.Discard()
+			return err
+		}
+
+		if delayTime.Before(before) {
+			// TODO handle record with multiple messages
+			val := iter.Value()
+			if _, err := prependValueTx(tx, topicFmt, headPosKeyFmt, topic, val); err != nil {
+				tx.Discard()
+				return err
+			}
+			if err := tx.Delete(key, nil); err != nil {
+				tx.Discard()
+				return err
+			}
+		} else {
+			// We've already reached a timestamp that is in the future, no need to
+			// continue.
+			break
+		}
+	}
+
+	iter.Release()
+	if err := iter.Error(); err != nil {
+		tx.Discard()
+		return fmt.Errorf("iterating over delayed messages for topic %s: %v", topic, err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		tx.Discard()
+		return fmt.Errorf("committing nack transaction: %v", err)
+	}
+
+	return nil
+}
+
 // Close the store.
 func (s *store) Close() error {
 	return s.db.Close()
@@ -288,6 +451,48 @@ func (s *store) Close() error {
 func (s *store) Destroy() {
 	_ = s.Close()
 	_ = os.RemoveAll(s.path)
+}
+
+func insertDelay(db *leveldb.DB, topic string, val value, delaySeconds int) error {
+	delayTo := time.Now().Unix() + int64(delaySeconds)
+
+	key := []byte(fmt.Sprintf(delayTopicFmt, topic, delayTo))
+
+	exists, err := db.Has(key, nil)
+	if err != nil {
+		return fmt.Errorf("checking for has: %v", err)
+	}
+	// A value in this position already exists, we need to combine them.
+	if exists {
+		panic("unimplemented")
+	}
+
+	if err := db.Put(key, val, nil); err != nil {
+		return fmt.Errorf("putting value: %v", err)
+	}
+
+	return nil
+}
+
+func insertDelayTx(tx *leveldb.Transaction, topic string, val value, delaySeconds int) error {
+	delayTo := time.Now().Unix() + int64(delaySeconds)
+
+	key := []byte(fmt.Sprintf(delayTopicFmt, topic, delayTo))
+
+	exists, err := tx.Has(key, nil)
+	if err != nil {
+		return fmt.Errorf("checking for has: %v", err)
+	}
+	// A value in this position already exists, we need to combine them.
+	if exists {
+		panic("unimplemented")
+	}
+
+	if err := tx.Put(key, val, nil); err != nil {
+		return fmt.Errorf("putting value: %v", err)
+	}
+
+	return nil
 }
 
 // getOffset retrieves a record for a topic with a specific offset.
@@ -315,8 +520,8 @@ func getOffsetTx(db *leveldb.Transaction, topicFmt string, topic string, offset 
 }
 
 // getPos gets the integer position value (aka offset) for topic and key format.
-func getPos(db *leveldb.DB, keyFmt string, topic string) (int, error) {
-	key := []byte(fmt.Sprintf(keyFmt, topic))
+func getPos(db *leveldb.DB, topicFmt string, topic string) (int, error) {
+	key := []byte(fmt.Sprintf(topicFmt, topic))
 
 	pos, err := db.Get(key, nil)
 	if errors.Is(err, leveldb.ErrNotFound) {
@@ -335,8 +540,8 @@ func getPos(db *leveldb.DB, keyFmt string, topic string) (int, error) {
 }
 
 // getPosTx gets the integer position value (aka offset) for topic and key format.
-func getPosTx(tx *leveldb.Transaction, keyFmt string, topic string) (int, error) {
-	key := []byte(fmt.Sprintf(keyFmt, topic))
+func getPosTx(tx *leveldb.Transaction, topicFmt string, topic string) (int, error) {
+	key := []byte(fmt.Sprintf(topicFmt, topic))
 
 	pos, err := tx.Get(key, nil)
 	if errors.Is(err, leveldb.ErrNotFound) {
@@ -355,15 +560,15 @@ func getPosTx(tx *leveldb.Transaction, keyFmt string, topic string) (int, error)
 }
 
 // getValue returns the raw value stored given a key format, topic and offset.
-func getValue(db *leveldb.DB, keyFmt string, topic string, offset int) (value, error) {
-	key := fmt.Sprintf(keyFmt, topic, offset)
+func getValue(db *leveldb.DB, topicFmt string, topic string, offset int) (value, error) {
+	key := fmt.Sprintf(topicFmt, topic, offset)
 
 	val, err := db.Get([]byte(key), nil)
 	if errors.Is(err, leveldb.ErrNotFound) {
 		return nil, errTopicEmpty
 	}
 	if err != nil {
-		return nil, fmt.Errorf("getting value with fmt [%s] from topic %s at offset %d: %v", keyFmt, topic, offset, err)
+		return nil, fmt.Errorf("getting value with fmt [%s] from topic %s at offset %d: %v", topicFmt, topic, offset, err)
 	}
 
 	return val, nil
@@ -371,7 +576,7 @@ func getValue(db *leveldb.DB, keyFmt string, topic string, offset int) (value, e
 
 // appendValue returns inserts a new value to the end of a topic given,
 // returning the inserted offset.
-func appendValue(db *leveldb.DB, tailPosKeyFmt, keyFmt, topic string, val value) (offset int, err error) {
+func appendValue(db *leveldb.DB, topicFmt, tailPosKeyFmt, topic string, val value) (offset int, err error) {
 	tailPosKey := []byte(fmt.Sprintf(tailPosKeyFmt, topic))
 
 	// Fetch the current tail position
@@ -386,7 +591,7 @@ func appendValue(db *leveldb.DB, tailPosKeyFmt, keyFmt, topic string, val value)
 	}
 
 	// Write new record to next tail position
-	newKey := []byte(fmt.Sprintf(keyFmt, topic, origOffset))
+	newKey := []byte(fmt.Sprintf(topicFmt, topic, origOffset))
 
 	if err := db.Put(newKey, val, nil); err != nil {
 		return 0, fmt.Errorf("putting value: %v", err)
@@ -404,7 +609,7 @@ func appendValue(db *leveldb.DB, tailPosKeyFmt, keyFmt, topic string, val value)
 
 // appendValueTx returns inserts a new value to the end of a topic given,
 // returning the inserted offset.
-func appendValueTx(tx *leveldb.Transaction, tailPosKeyFmt, keyFmt, topic string, val value) (offset int, err error) {
+func appendValueTx(tx *leveldb.Transaction, topicFmt, tailPosKeyFmt, topic string, val value) (offset int, err error) {
 	tailPosKey := []byte(fmt.Sprintf(tailPosKeyFmt, topic))
 
 	// Fetch the current tail position
@@ -419,7 +624,7 @@ func appendValueTx(tx *leveldb.Transaction, tailPosKeyFmt, keyFmt, topic string,
 	}
 
 	// Write new record to next tail position
-	newKey := []byte(fmt.Sprintf(keyFmt, topic, origOffset))
+	newKey := []byte(fmt.Sprintf(topicFmt, topic, origOffset))
 
 	if err := tx.Put(newKey, val, nil); err != nil {
 		return 0, fmt.Errorf("putting value: %v", err)
@@ -437,7 +642,7 @@ func appendValueTx(tx *leveldb.Transaction, tailPosKeyFmt, keyFmt, topic string,
 
 // prependValueTx inserts a value to the head of a topic, decrementing the head
 // position and returning the offset of the prepended value.
-func prependValueTx(tx *leveldb.Transaction, headPosKeyFmt, keyFmt, topic string, val value) (offset int, err error) {
+func prependValueTx(tx *leveldb.Transaction, topicFmt, headPosKeyFmt, topic string, val value) (offset int, err error) {
 	headPosKey := []byte(fmt.Sprintf(headPosKeyFmt, topic))
 
 	// Fetch the current head position
@@ -453,7 +658,7 @@ func prependValueTx(tx *leveldb.Transaction, headPosKeyFmt, keyFmt, topic string
 
 	// Write new record to lower neighbouring position
 	newHeadOffset := headOffset - 1
-	newKey := []byte(fmt.Sprintf(keyFmt, topic, newHeadOffset))
+	newKey := []byte(fmt.Sprintf(topicFmt, topic, newHeadOffset))
 
 	if err := tx.Put(newKey, val, nil); err != nil {
 		return 0, fmt.Errorf("putting value: %v", err)
@@ -506,4 +711,22 @@ func addPosTx(tx *leveldb.Transaction, posKeyFmt string, topic string, sum int) 
 	}
 
 	return oldPos, newPos, nil
+}
+
+// timeFromDelayKey returns the "done" timestamp from the key of a message in a
+// delay queue.
+func timeFromDelayKey(key string) (time.Time, error) {
+	splitKey := strings.Split(key, "-")
+	if len(splitKey) < 3 {
+		return time.Time{}, fmt.Errorf("invalid delay key format: %s", key)
+	}
+
+	timestampInt, err := strconv.Atoi(splitKey[2])
+	if err != nil {
+		return time.Time{}, fmt.Errorf("converting timestamp to int: %v", err)
+	}
+
+	timestampTime := time.Unix(int64(timestampInt), 0)
+
+	return timestampTime, nil
 }

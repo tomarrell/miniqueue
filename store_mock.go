@@ -5,48 +5,120 @@
 package main
 
 import (
-	gomock "github.com/golang/mock/gomock"
 	reflect "reflect"
+	time "time"
+
+	gomock "github.com/golang/mock/gomock"
+	util "github.com/syndtr/goleveldb/leveldb/util"
 )
 
-// Mockstorer is a mock of storer interface
+// Mockstorer is a mock of storer interface.
 type Mockstorer struct {
 	ctrl     *gomock.Controller
 	recorder *MockstorerMockRecorder
 }
 
-// MockstorerMockRecorder is the mock recorder for Mockstorer
+// MockstorerMockRecorder is the mock recorder for Mockstorer.
 type MockstorerMockRecorder struct {
 	mock *Mockstorer
 }
 
-// NewMockstorer creates a new mock instance
+// NewMockstorer creates a new mock instance.
 func NewMockstorer(ctrl *gomock.Controller) *Mockstorer {
 	mock := &Mockstorer{ctrl: ctrl}
 	mock.recorder = &MockstorerMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use
+// EXPECT returns an object that allows the caller to indicate expected use.
 func (m *Mockstorer) EXPECT() *MockstorerMockRecorder {
 	return m.recorder
 }
 
-// Insert mocks base method
-func (m *Mockstorer) Insert(topic string, value value) error {
+// Ack mocks base method.
+func (m *Mockstorer) Ack(topic string, ackOffset int) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Insert", topic, value)
+	ret := m.ctrl.Call(m, "Ack", topic, ackOffset)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// Insert indicates an expected call of Insert
-func (mr *MockstorerMockRecorder) Insert(topic, value interface{}) *gomock.Call {
+// Ack indicates an expected call of Ack.
+func (mr *MockstorerMockRecorder) Ack(topic, ackOffset interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Insert", reflect.TypeOf((*Mockstorer)(nil).Insert), topic, value)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ack", reflect.TypeOf((*Mockstorer)(nil).Ack), topic, ackOffset)
 }
 
-// GetNext mocks base method
+// Back mocks base method.
+func (m *Mockstorer) Back(topic string, ackOffset int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Back", topic, ackOffset)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Back indicates an expected call of Back.
+func (mr *MockstorerMockRecorder) Back(topic, ackOffset interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Back", reflect.TypeOf((*Mockstorer)(nil).Back), topic, ackOffset)
+}
+
+// Close mocks base method.
+func (m *Mockstorer) Close() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Close")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Close indicates an expected call of Close.
+func (mr *MockstorerMockRecorder) Close() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*Mockstorer)(nil).Close))
+}
+
+// Dack mocks base method.
+func (m *Mockstorer) Dack(topic string, ackOffset, delaySeconds int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Dack", topic, ackOffset, delaySeconds)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Dack indicates an expected call of Dack.
+func (mr *MockstorerMockRecorder) Dack(topic, ackOffset, delaySeconds interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dack", reflect.TypeOf((*Mockstorer)(nil).Dack), topic, ackOffset, delaySeconds)
+}
+
+// Destroy mocks base method.
+func (m *Mockstorer) Destroy() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Destroy")
+}
+
+// Destroy indicates an expected call of Destroy.
+func (mr *MockstorerMockRecorder) Destroy() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Destroy", reflect.TypeOf((*Mockstorer)(nil).Destroy))
+}
+
+// GetDelayed mocks base method.
+func (m *Mockstorer) GetDelayed(topic string) (delayedIterator, func() error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDelayed", topic)
+	ret0, _ := ret[0].(delayedIterator)
+	ret1, _ := ret[1].(func() error)
+	return ret0, ret1
+}
+
+// GetDelayed indicates an expected call of GetDelayed.
+func (mr *MockstorerMockRecorder) GetDelayed(topic interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDelayed", reflect.TypeOf((*Mockstorer)(nil).GetDelayed), topic)
+}
+
+// GetNext mocks base method.
 func (m *Mockstorer) GetNext(topic string) (value, int, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetNext", topic)
@@ -56,27 +128,27 @@ func (m *Mockstorer) GetNext(topic string) (value, int, error) {
 	return ret0, ret1, ret2
 }
 
-// GetNext indicates an expected call of GetNext
+// GetNext indicates an expected call of GetNext.
 func (mr *MockstorerMockRecorder) GetNext(topic interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNext", reflect.TypeOf((*Mockstorer)(nil).GetNext), topic)
 }
 
-// Ack mocks base method
-func (m *Mockstorer) Ack(topic string, ackOffset int) error {
+// Insert mocks base method.
+func (m *Mockstorer) Insert(topic string, value value) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Ack", topic, ackOffset)
+	ret := m.ctrl.Call(m, "Insert", topic, value)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// Ack indicates an expected call of Ack
-func (mr *MockstorerMockRecorder) Ack(topic, ackOffset interface{}) *gomock.Call {
+// Insert indicates an expected call of Insert.
+func (mr *MockstorerMockRecorder) Insert(topic, value interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ack", reflect.TypeOf((*Mockstorer)(nil).Ack), topic, ackOffset)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Insert", reflect.TypeOf((*Mockstorer)(nil).Insert), topic, value)
 }
 
-// Nack mocks base method
+// Nack mocks base method.
 func (m *Mockstorer) Nack(topic string, ackOffset int) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Nack", topic, ackOffset)
@@ -84,48 +156,195 @@ func (m *Mockstorer) Nack(topic string, ackOffset int) error {
 	return ret0
 }
 
-// Nack indicates an expected call of Nack
+// Nack indicates an expected call of Nack.
 func (mr *MockstorerMockRecorder) Nack(topic, ackOffset interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Nack", reflect.TypeOf((*Mockstorer)(nil).Nack), topic, ackOffset)
 }
 
-// Back mocks base method
-func (m *Mockstorer) Back(topic string, ackOffset int) error {
+// ReturnDelayed mocks base method.
+func (m *Mockstorer) ReturnDelayed(topic string, before time.Time) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Back", topic, ackOffset)
+	ret := m.ctrl.Call(m, "ReturnDelayed", topic, before)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// Back indicates an expected call of Back
-func (mr *MockstorerMockRecorder) Back(topic, ackOffset interface{}) *gomock.Call {
+// ReturnDelayed indicates an expected call of ReturnDelayed.
+func (mr *MockstorerMockRecorder) ReturnDelayed(topic, before interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Back", reflect.TypeOf((*Mockstorer)(nil).Back), topic, ackOffset)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReturnDelayed", reflect.TypeOf((*Mockstorer)(nil).ReturnDelayed), topic, before)
 }
 
-// Close mocks base method
-func (m *Mockstorer) Close() error {
+// MockdelayedIterator is a mock of delayedIterator interface.
+type MockdelayedIterator struct {
+	ctrl     *gomock.Controller
+	recorder *MockdelayedIteratorMockRecorder
+}
+
+// MockdelayedIteratorMockRecorder is the mock recorder for MockdelayedIterator.
+type MockdelayedIteratorMockRecorder struct {
+	mock *MockdelayedIterator
+}
+
+// NewMockdelayedIterator creates a new mock instance.
+func NewMockdelayedIterator(ctrl *gomock.Controller) *MockdelayedIterator {
+	mock := &MockdelayedIterator{ctrl: ctrl}
+	mock.recorder = &MockdelayedIteratorMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockdelayedIterator) EXPECT() *MockdelayedIteratorMockRecorder {
+	return m.recorder
+}
+
+// Error mocks base method.
+func (m *MockdelayedIterator) Error() error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Close")
+	ret := m.ctrl.Call(m, "Error")
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// Close indicates an expected call of Close
-func (mr *MockstorerMockRecorder) Close() *gomock.Call {
+// Error indicates an expected call of Error.
+func (mr *MockdelayedIteratorMockRecorder) Error() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*Mockstorer)(nil).Close))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Error", reflect.TypeOf((*MockdelayedIterator)(nil).Error))
 }
 
-// Destroy mocks base method
-func (m *Mockstorer) Destroy() {
+// First mocks base method.
+func (m *MockdelayedIterator) First() bool {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Destroy")
+	ret := m.ctrl.Call(m, "First")
+	ret0, _ := ret[0].(bool)
+	return ret0
 }
 
-// Destroy indicates an expected call of Destroy
-func (mr *MockstorerMockRecorder) Destroy() *gomock.Call {
+// First indicates an expected call of First.
+func (mr *MockdelayedIteratorMockRecorder) First() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Destroy", reflect.TypeOf((*Mockstorer)(nil).Destroy))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "First", reflect.TypeOf((*MockdelayedIterator)(nil).First))
+}
+
+// Key mocks base method.
+func (m *MockdelayedIterator) Key() []byte {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Key")
+	ret0, _ := ret[0].([]byte)
+	return ret0
+}
+
+// Key indicates an expected call of Key.
+func (mr *MockdelayedIteratorMockRecorder) Key() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Key", reflect.TypeOf((*MockdelayedIterator)(nil).Key))
+}
+
+// Last mocks base method.
+func (m *MockdelayedIterator) Last() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Last")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Last indicates an expected call of Last.
+func (mr *MockdelayedIteratorMockRecorder) Last() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Last", reflect.TypeOf((*MockdelayedIterator)(nil).Last))
+}
+
+// Next mocks base method.
+func (m *MockdelayedIterator) Next() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Next")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Next indicates an expected call of Next.
+func (mr *MockdelayedIteratorMockRecorder) Next() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Next", reflect.TypeOf((*MockdelayedIterator)(nil).Next))
+}
+
+// Prev mocks base method.
+func (m *MockdelayedIterator) Prev() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Prev")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Prev indicates an expected call of Prev.
+func (mr *MockdelayedIteratorMockRecorder) Prev() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Prev", reflect.TypeOf((*MockdelayedIterator)(nil).Prev))
+}
+
+// Release mocks base method.
+func (m *MockdelayedIterator) Release() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Release")
+}
+
+// Release indicates an expected call of Release.
+func (mr *MockdelayedIteratorMockRecorder) Release() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Release", reflect.TypeOf((*MockdelayedIterator)(nil).Release))
+}
+
+// Seek mocks base method.
+func (m *MockdelayedIterator) Seek(key []byte) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Seek", key)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Seek indicates an expected call of Seek.
+func (mr *MockdelayedIteratorMockRecorder) Seek(key interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Seek", reflect.TypeOf((*MockdelayedIterator)(nil).Seek), key)
+}
+
+// SetReleaser mocks base method.
+func (m *MockdelayedIterator) SetReleaser(releaser util.Releaser) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetReleaser", releaser)
+}
+
+// SetReleaser indicates an expected call of SetReleaser.
+func (mr *MockdelayedIteratorMockRecorder) SetReleaser(releaser interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetReleaser", reflect.TypeOf((*MockdelayedIterator)(nil).SetReleaser), releaser)
+}
+
+// Valid mocks base method.
+func (m *MockdelayedIterator) Valid() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Valid")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Valid indicates an expected call of Valid.
+func (mr *MockdelayedIteratorMockRecorder) Valid() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Valid", reflect.TypeOf((*MockdelayedIterator)(nil).Valid))
+}
+
+// Value mocks base method.
+func (m *MockdelayedIterator) Value() []byte {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Value")
+	ret0, _ := ret[0].([]byte)
+	return ret0
+}
+
+// Value indicates an expected call of Value.
+func (mr *MockdelayedIteratorMockRecorder) Value() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Value", reflect.TypeOf((*MockdelayedIterator)(nil).Value))
 }
