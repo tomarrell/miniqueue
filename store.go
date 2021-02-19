@@ -4,6 +4,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -77,6 +78,9 @@ func (s storeError) Error() string {
 }
 
 const (
+	// metaTopics is a key which contains a JSON encoded slice
+	metaTopics = "m-topics"
+
 	// The topic queue is the primary queue containing the records to be
 	// processed. We need to keep track of the head and the tail offsets of the
 	// queue in their respective keys in order to quickly append/pop messages from
@@ -149,7 +153,7 @@ func (s *store) Nack(topic string, ackOffset int) error {
 	exists, err := tx.Has(nackKey, nil)
 	if err != nil {
 		tx.Discard()
-		return fmt.Errorf("checking for has: %v", err)
+		return fmt.Errorf("checking has %s: %v", nackKey, err)
 	}
 	if !exists {
 		tx.Discard()
@@ -196,7 +200,7 @@ func (s *store) Back(topic string, ackOffset int) error {
 	exists, err := tx.Has(backKey, nil)
 	if err != nil {
 		tx.Discard()
-		return fmt.Errorf("checking for has: %v", err)
+		return fmt.Errorf("checking has %s: %v", backKey, err)
 	}
 	if !exists {
 		tx.Discard()
@@ -240,7 +244,7 @@ func (s *store) Insert(topic string, value value) error {
 
 	exists, err := s.db.Has(tailPosKey, nil)
 	if err != nil {
-		return fmt.Errorf("checking for has: %v", err)
+		return fmt.Errorf("checking has %s: %v", tailPosKey, err)
 	}
 
 	// The key already exists
@@ -250,6 +254,11 @@ func (s *store) Insert(topic string, value value) error {
 		}
 
 		return nil
+	}
+
+	// Add the topic to the list of topics
+	if err := addTopicMeta(s.db, topic); err != nil {
+		return fmt.Errorf("adding topic to meta: %v", err)
 	}
 
 	// Write initial head position
@@ -330,7 +339,7 @@ func (s *store) Dack(topic string, ackOffset int, delaySeconds int) error {
 	exists, err := tx.Has(dackKey, nil)
 	if err != nil {
 		tx.Discard()
-		return fmt.Errorf("checking for has: %v", err)
+		return fmt.Errorf("checking has %s: %v", dackKey, err)
 	}
 	if !exists {
 		tx.Discard()
@@ -466,7 +475,7 @@ func insertDelay(db *leveldb.DB, topic string, val value, delaySeconds int) erro
 		key = fmt.Sprintf(delayTopicFmt, topic, delayTo, localOffset)
 		exists, err := db.Has([]byte(key), nil)
 		if err != nil {
-			return fmt.Errorf("checking for has: %v", err)
+			return fmt.Errorf("checking has %s: %v", key, err)
 		}
 		// A value in this position already exists, we need to combine them.
 		if !exists {
@@ -495,7 +504,7 @@ func insertDelayTx(tx *leveldb.Transaction, topic string, val value, delaySecond
 		key = fmt.Sprintf(delayTopicFmt, topic, delayTo, localOffset)
 		exists, err := tx.Has([]byte(key), nil)
 		if err != nil {
-			return fmt.Errorf("checking for has: %v", err)
+			return fmt.Errorf("checking has %s: %v", key, err)
 		}
 		// A value in this position already exists, we need to combine them.
 		if !exists {
@@ -745,4 +754,38 @@ func timeFromDelayKey(key string) (time.Time, error) {
 	timestampTime := time.Unix(int64(timestampInt), 0)
 
 	return timestampTime, nil
+}
+
+func addTopicMeta(db *leveldb.DB, topic string) error {
+	key := []byte(metaTopics)
+	topics := []string{topic}
+
+	exists, err := db.Has(key, nil)
+	if err != nil {
+		return fmt.Errorf("checking has %s: %v", key, err)
+	}
+	if exists {
+		val, err := db.Get(key, nil)
+		if err != nil {
+			return fmt.Errorf("getting key %s: %v", key, err)
+		}
+
+		var existingTopics []string
+		if err := json.Unmarshal(val, &topics); err != nil {
+			return fmt.Errorf("unmarshalling meta topics: %v", err)
+		}
+
+		topics = append(existingTopics, topic)
+	}
+
+	val, err := json.Marshal(topics)
+	if err != nil {
+		return fmt.Errorf("marshalling meta topics: %v", err)
+	}
+
+	if err := db.Put(key, val, nil); err != nil {
+		return fmt.Errorf("putting meta topics %s: %v", key, err)
+	}
+
+	return nil
 }

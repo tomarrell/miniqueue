@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -22,6 +23,25 @@ func TestInsert_Single(t *testing.T) {
 	val, _, err := s.GetNext(defaultTopic)
 	assert.NoError(t, err)
 	assert.Equal(t, "test_value", string(val))
+}
+
+func TestInsert_TopicMeta(t *testing.T) {
+	s := newStore(tmpDBPath).(*store)
+	t.Cleanup(s.Destroy)
+
+	assert.NoError(t, s.Insert(defaultTopic, []byte("test_value_1")))
+
+	var topics []string
+	val, err := s.db.Get([]byte(metaTopics), nil)
+	assert.NoError(t, err)
+	assert.NoError(t, json.Unmarshal(val, &topics))
+	assert.Contains(t, topics, defaultTopic)
+
+	assert.NoError(t, s.Insert("other_topic", []byte("test_value_2")))
+	val, err = s.db.Get([]byte(metaTopics), nil)
+	assert.NoError(t, err)
+	assert.NoError(t, json.Unmarshal(val, &topics))
+	assert.Contains(t, topics, "other_topic")
 }
 
 func TestInsert_TwoSameTopic(t *testing.T) {
