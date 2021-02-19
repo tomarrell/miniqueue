@@ -96,7 +96,7 @@ const (
 	// time as a unix timestamp. This provides strict ordering, allowing iteration
 	// over the items in prefixed byte-order.
 	delayTopicPrefix = "%s-delay-"                // topic: [topic]-delay-
-	delayTopicFmt    = delayTopicPrefix + "%011d" // topic: [topic]-delay-[until_unix_timestamp]
+	delayTopicFmt    = delayTopicPrefix + "%d-%d" // topic: [topic]-delay-[until_unix_timestamp]-[local_index]
 )
 
 // store handles the the underlying leveldb implementation.
@@ -401,7 +401,8 @@ func (s *store) ReturnDelayed(topic string, before time.Time) error {
 	// For each record, check if the timestamp is earlier than the given cutoff,
 	// returning the record to the front of the main queue if it is.
 	//
-	// TODO fix returned messages being in reverse chronological order
+	// TODO fix returned messages being in reverse chronological order if there
+	// are multiple being done at once
 	for iter.Next() {
 		key := iter.Key()
 		delayTime, err := timeFromDelayKey(string(key))
@@ -411,7 +412,6 @@ func (s *store) ReturnDelayed(topic string, before time.Time) error {
 		}
 
 		if delayTime.Before(before) {
-			// TODO handle record with multiple messages
 			val := iter.Value()
 			if _, err := prependValueTx(tx, topicFmt, headPosKeyFmt, topic, val); err != nil {
 				tx.Discard()
@@ -456,18 +456,26 @@ func (s *store) Destroy() {
 func insertDelay(db *leveldb.DB, topic string, val value, delaySeconds int) error {
 	delayTo := time.Now().Unix() + int64(delaySeconds)
 
-	key := []byte(fmt.Sprintf(delayTopicFmt, topic, delayTo))
+	var (
+		key string
+		// localOffset to enable inserting multiple records at a given timestamp
+		localOffset = 0
+	)
 
-	exists, err := db.Has(key, nil)
-	if err != nil {
-		return fmt.Errorf("checking for has: %v", err)
-	}
-	// A value in this position already exists, we need to combine them.
-	if exists {
-		panic("unimplemented")
+	for {
+		key = fmt.Sprintf(delayTopicFmt, topic, delayTo, localOffset)
+		exists, err := db.Has([]byte(key), nil)
+		if err != nil {
+			return fmt.Errorf("checking for has: %v", err)
+		}
+		// A value in this position already exists, we need to combine them.
+		if !exists {
+			break
+		}
+		localOffset++
 	}
 
-	if err := db.Put(key, val, nil); err != nil {
+	if err := db.Put([]byte(key), val, nil); err != nil {
 		return fmt.Errorf("putting value: %v", err)
 	}
 
@@ -477,18 +485,26 @@ func insertDelay(db *leveldb.DB, topic string, val value, delaySeconds int) erro
 func insertDelayTx(tx *leveldb.Transaction, topic string, val value, delaySeconds int) error {
 	delayTo := time.Now().Unix() + int64(delaySeconds)
 
-	key := []byte(fmt.Sprintf(delayTopicFmt, topic, delayTo))
+	var (
+		key string
+		// localOffset to enable inserting multiple records at a given timestamp
+		localOffset = 0
+	)
 
-	exists, err := tx.Has(key, nil)
-	if err != nil {
-		return fmt.Errorf("checking for has: %v", err)
-	}
-	// A value in this position already exists, we need to combine them.
-	if exists {
-		panic("unimplemented")
+	for {
+		key = fmt.Sprintf(delayTopicFmt, topic, delayTo, localOffset)
+		exists, err := tx.Has([]byte(key), nil)
+		if err != nil {
+			return fmt.Errorf("checking for has: %v", err)
+		}
+		// A value in this position already exists, we need to combine them.
+		if !exists {
+			break
+		}
+		localOffset++
 	}
 
-	if err := tx.Put(key, val, nil); err != nil {
+	if err := tx.Put([]byte(key), val, nil); err != nil {
 		return fmt.Errorf("putting value: %v", err)
 	}
 

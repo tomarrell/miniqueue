@@ -118,7 +118,7 @@ func TestAck(t *testing.T) {
 	assert.False(t, has)
 }
 
-func TestAckWithPos(t *testing.T) {
+func TestAck_WithPos(t *testing.T) {
 	s := newStore(tmpDBPath).(*store)
 	t.Cleanup(s.Destroy)
 
@@ -152,7 +152,7 @@ func TestNack(t *testing.T) {
 	assert.NoError(t, s.Nack(defaultTopic, offset))
 }
 
-func TestNackTwice(t *testing.T) {
+func TestNack_Twice(t *testing.T) {
 	s := newStore(tmpDBPath)
 	t.Cleanup(s.Destroy)
 
@@ -170,7 +170,7 @@ func TestNackTwice(t *testing.T) {
 	assert.Equal(t, err, errNackMsgNotExist)
 }
 
-func TestNackAndGet(t *testing.T) {
+func TestNack_AndGet(t *testing.T) {
 	s := newStore(tmpDBPath)
 	t.Cleanup(s.Destroy)
 
@@ -193,7 +193,7 @@ func TestNackAndGet(t *testing.T) {
 	assert.Equal(t, msg1, string(val))
 }
 
-// Nack
+// Back
 func TestBack(t *testing.T) {
 	s := newStore(tmpDBPath)
 	t.Cleanup(s.Destroy)
@@ -206,7 +206,7 @@ func TestBack(t *testing.T) {
 	assert.NoError(t, s.Back(defaultTopic, offset))
 }
 
-func TestBackSentBack(t *testing.T) {
+func TestBack_Get(t *testing.T) {
 	s := newStore(tmpDBPath)
 	t.Cleanup(s.Destroy)
 
@@ -246,8 +246,7 @@ func TestDack(t *testing.T) {
 	assert.NoError(t, s.Dack(defaultTopic, offset, 3))
 }
 
-func TestDackSameTime(t *testing.T) {
-	t.Skip()
+func TestDack_SameTime(t *testing.T) {
 	s := newStore(tmpDBPath).(*store)
 	t.Cleanup(s.Destroy)
 
@@ -268,7 +267,7 @@ func TestGetDelayed(t *testing.T) {
 	s := newStore(tmpDBPath).(*store)
 	t.Cleanup(s.Destroy)
 
-	now := time.Now()
+	startTime := time.Now()
 
 	msg1 := []byte("test_value_1")
 	msg2 := []byte("test_value_2")
@@ -281,12 +280,48 @@ func TestGetDelayed(t *testing.T) {
 	assert.True(t, iter.Next())
 	timestamp, _ := strconv.Atoi(strings.Split(string(iter.Key()), "-")[2])
 	delayToTime := time.Unix(int64(timestamp), 0)
-	assert.True(t, now.Before(delayToTime), "expected delay timestamp to be after now")
+	assert.True(t, startTime.Before(delayToTime), "expected delay timestamp to be after now")
 
 	assert.True(t, iter.Next())
 	timestamp, _ = strconv.Atoi(strings.Split(string(iter.Key()), "-")[2])
 	delayToTime = time.Unix(int64(timestamp), 0)
-	assert.True(t, now.Before(delayToTime), "expected delay timestamp to be after now")
+	assert.True(t, startTime.Before(delayToTime), "expected delay timestamp to be after now")
+
+	assert.NoError(t, closer())
+}
+
+func TestGetDelayed_SameTimestamp(t *testing.T) {
+	s := newStore(tmpDBPath).(*store)
+	t.Cleanup(s.Destroy)
+
+	startTime := time.Now()
+
+	msg1 := []byte("test_value_1")
+	msg2 := []byte("test_value_2")
+
+	assert.NoError(t, s.Insert(defaultTopic, msg1))
+	assert.NoError(t, s.Insert(defaultTopic, msg2))
+
+	_, offset1, _ := s.GetNext(defaultTopic)
+	_, offset2, _ := s.GetNext(defaultTopic)
+	assert.NoError(t, s.Dack(defaultTopic, offset1, 1))
+	assert.NoError(t, s.Dack(defaultTopic, offset2, 1))
+
+	iter, closer := s.GetDelayed(defaultTopic)
+
+	assert.True(t, iter.Next())
+	localOffset := strings.Split(string(iter.Key()), "-")[3]
+	timestamp, _ := strconv.Atoi(strings.Split(string(iter.Key()), "-")[2])
+	delayToTime := time.Unix(int64(timestamp), 0)
+	assert.True(t, startTime.Before(delayToTime), "expected delay timestamp to be after now")
+	assert.Equal(t, "0", localOffset)
+
+	assert.True(t, iter.Next())
+	localOffset = strings.Split(string(iter.Key()), "-")[3]
+	timestamp, _ = strconv.Atoi(strings.Split(string(iter.Key()), "-")[2])
+	delayToTime = time.Unix(int64(timestamp), 0)
+	assert.True(t, startTime.Before(delayToTime), "expected delay timestamp to be after now")
+	assert.Equal(t, "1", localOffset)
 
 	assert.NoError(t, closer())
 }
@@ -311,7 +346,7 @@ func TestReturnDelayed(t *testing.T) {
 	assert.NoError(t, s.ReturnDelayed(defaultTopic, now))
 }
 
-func TestReturnDelayedReturnToMainQueue(t *testing.T) {
+func TestReturnDelayed_ReturnToMainQueue(t *testing.T) {
 	s := newStore(tmpDBPath).(*store)
 	t.Cleanup(s.Destroy)
 
@@ -326,6 +361,32 @@ func TestReturnDelayedReturnToMainQueue(t *testing.T) {
 
 	_, offset, _ = s.GetNext(defaultTopic)
 	assert.NoError(t, s.Dack(defaultTopic, offset, 3))
+
+	assert.NoError(t, s.ReturnDelayed(defaultTopic, time.Now().Add(time.Minute)))
+
+	b, _, err := s.GetNext(defaultTopic)
+	assert.NoError(t, err)
+	assert.Equal(t, msg2, b)
+
+	b, _, err = s.GetNext(defaultTopic)
+	assert.NoError(t, err)
+	assert.Equal(t, msg1, b)
+}
+
+func TestReturnDelayed_ReturnSameTimeToMainQueue(t *testing.T) {
+	s := newStore(tmpDBPath).(*store)
+	t.Cleanup(s.Destroy)
+
+	msg1 := []byte("test_value_1")
+	msg2 := []byte("test_value_2")
+
+	assert.NoError(t, s.Insert(defaultTopic, msg1))
+	assert.NoError(t, s.Insert(defaultTopic, msg2))
+
+	_, offset1, _ := s.GetNext(defaultTopic)
+	_, offset2, _ := s.GetNext(defaultTopic)
+	assert.NoError(t, s.Dack(defaultTopic, offset1, 1))
+	assert.NoError(t, s.Dack(defaultTopic, offset2, 1))
 
 	assert.NoError(t, s.ReturnDelayed(defaultTopic, time.Now().Add(time.Minute)))
 
