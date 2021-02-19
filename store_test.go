@@ -278,12 +278,12 @@ func TestGetDelayed(t *testing.T) {
 	iter, closer := s.GetDelayed(defaultTopic)
 
 	assert.True(t, iter.Next())
-	timestamp, _ := strconv.Atoi(strings.Split(string(iter.Key()), "-")[2])
+	timestamp, _ := strconv.Atoi(strings.Split(string(iter.Key()), "-")[3])
 	delayToTime := time.Unix(int64(timestamp), 0)
 	assert.True(t, startTime.Before(delayToTime), "expected delay timestamp to be after now")
 
 	assert.True(t, iter.Next())
-	timestamp, _ = strconv.Atoi(strings.Split(string(iter.Key()), "-")[2])
+	timestamp, _ = strconv.Atoi(strings.Split(string(iter.Key()), "-")[3])
 	delayToTime = time.Unix(int64(timestamp), 0)
 	assert.True(t, startTime.Before(delayToTime), "expected delay timestamp to be after now")
 
@@ -310,15 +310,15 @@ func TestGetDelayed_SameTimestamp(t *testing.T) {
 	iter, closer := s.GetDelayed(defaultTopic)
 
 	assert.True(t, iter.Next())
-	localOffset := strings.Split(string(iter.Key()), "-")[3]
-	timestamp, _ := strconv.Atoi(strings.Split(string(iter.Key()), "-")[2])
+	localOffset := strings.Split(string(iter.Key()), "-")[4]
+	timestamp, _ := strconv.Atoi(strings.Split(string(iter.Key()), "-")[3])
 	delayToTime := time.Unix(int64(timestamp), 0)
 	assert.True(t, startTime.Before(delayToTime), "expected delay timestamp to be after now")
 	assert.Equal(t, "0", localOffset)
 
 	assert.True(t, iter.Next())
-	localOffset = strings.Split(string(iter.Key()), "-")[3]
-	timestamp, _ = strconv.Atoi(strings.Split(string(iter.Key()), "-")[2])
+	localOffset = strings.Split(string(iter.Key()), "-")[4]
+	timestamp, _ = strconv.Atoi(strings.Split(string(iter.Key()), "-")[3])
 	delayToTime = time.Unix(int64(timestamp), 0)
 	assert.True(t, startTime.Before(delayToTime), "expected delay timestamp to be after now")
 	assert.Equal(t, "1", localOffset)

@@ -81,21 +81,21 @@ const (
 	// processed. We need to keep track of the head and the tail offsets of the
 	// queue in their respective keys in order to quickly append/pop messages from
 	// the queue.
-	topicFmt      = "%s-%d"   // topic: [topic]-[offset]
-	headPosKeyFmt = "%s-head" // key: [topic]-head
-	tailPosKeyFmt = "%s-tail" // key: [topic]-tail
+	topicFmt      = "t-%s-%d"   // topic: [topic]-[offset]
+	headPosKeyFmt = "t-%s-head" // key: [topic]-head
+	tailPosKeyFmt = "t-%s-tail" // key: [topic]-tail
 
 	// The ack topic queue is an auxillary queue which allows keeping track of
 	// outstanding messages which are waiting on a consumer acknowledgement
 	// command. We only ever append to the end of this queue, delete records once
 	// they have been ACK'ed or moved back to the primary queue for reprocessing.
-	ackTopicFmt      = "%s-ack-%d"   // topic: [topic]-ack-[offset]
-	ackTailPosKeyFmt = "%s-ack-tail" // key: [topic]-ack-tail
+	ackTopicFmt      = "t-%s-ack-%d"   // topic: [topic]-ack-[offset]
+	ackTailPosKeyFmt = "t-%s-ack-tail" // key: [topic]-ack-tail
 
 	// The delay topic contains messages in buckets with their designated return
 	// time as a unix timestamp. This provides strict ordering, allowing iteration
 	// over the items in prefixed byte-order.
-	delayTopicPrefix = "%s-delay-"                // topic: [topic]-delay-
+	delayTopicPrefix = "t-%s-delay-"              // topic: [topic]-delay-
 	delayTopicFmt    = delayTopicPrefix + "%d-%d" // topic: [topic]-delay-[until_unix_timestamp]-[local_index]
 )
 
@@ -737,7 +737,7 @@ func timeFromDelayKey(key string) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("invalid delay key format: %s", key)
 	}
 
-	timestampInt, err := strconv.Atoi(splitKey[2])
+	timestampInt, err := strconv.Atoi(splitKey[3])
 	if err != nil {
 		return time.Time{}, fmt.Errorf("converting timestamp to int: %v", err)
 	}
