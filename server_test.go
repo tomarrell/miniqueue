@@ -135,8 +135,7 @@ func TestServerPublishSubscribeAck(t *testing.T) {
 
 	// Publish
 	msg1 := "test_msg_1"
-	res := helperPublishMessage(t, srv, defaultTopic, msg1)
-	defer res.Body.Close()
+	helperPublishMessage(t, srv, defaultTopic, msg1)
 
 	// Setup a subscriber
 	encoder, decoder, closeSub := helperSubscribeTopic(t, srv, defaultTopic)
@@ -157,8 +156,7 @@ func TestServerPublishSubscribeAck(t *testing.T) {
 
 	// Publish a new message to the same topic
 	msg2 := "test_msg_2"
-	res = helperPublishMessage(t, srv, defaultTopic, msg2)
-	defer res.Body.Close()
+	helperPublishMessage(t, srv, defaultTopic, msg2)
 
 	// Read again from the queue, expect the new message
 	assert.NoError(decoder.Decode(&out))
@@ -174,24 +172,43 @@ func TestServerNack(t *testing.T) {
 	srv, srvCloser := helperNewTestServer(t)
 	defer srvCloser()
 
-	// Publish twice
 	msg1 := "test_msg_1"
-	res := helperPublishMessage(t, srv, defaultTopic, msg1)
-	defer res.Body.Close()
+	helperPublishMessage(t, srv, defaultTopic, msg1)
 
-	// Setup a subscriber
 	enc, decoder, _ := helperSubscribeTopic(t, srv, defaultTopic)
 
-	// Consume message
 	var out subResponse
 	assert.NoError(decoder.Decode(&out))
 	assert.Equal(msg1, out.Msg)
 
 	assert.NoError(enc.Encode("NACK"))
 
-	// Consume message
 	assert.NoError(decoder.Decode(&out))
 	assert.Equal(msg1, out.Msg)
+}
+
+func TestServerBack(t *testing.T) {
+	assert := assert.New(t)
+
+	srv, srvCloser := helperNewTestServer(t)
+	defer srvCloser()
+
+	msg1 := "test_msg_1"
+	helperPublishMessage(t, srv, defaultTopic, msg1)
+
+	msg2 := "test_msg_2"
+	helperPublishMessage(t, srv, defaultTopic, msg2)
+
+	enc, decoder, _ := helperSubscribeTopic(t, srv, defaultTopic)
+
+	var out subResponse
+	assert.NoError(decoder.Decode(&out))
+	assert.Equal(msg1, out.Msg)
+
+	assert.NoError(enc.Encode("BACK"))
+
+	assert.NoError(decoder.Decode(&out))
+	assert.Equal(msg2, out.Msg)
 }
 
 func TestServerConnectionLost(t *testing.T) {
@@ -202,12 +219,10 @@ func TestServerConnectionLost(t *testing.T) {
 
 	// Publish twice
 	msg1 := "test_msg_1"
-	res := helperPublishMessage(t, srv, defaultTopic, msg1)
-	defer res.Body.Close()
+	helperPublishMessage(t, srv, defaultTopic, msg1)
 
 	msg2 := "test_msg_2"
-	res = helperPublishMessage(t, srv, defaultTopic, msg2)
-	defer res.Body.Close()
+	helperPublishMessage(t, srv, defaultTopic, msg2)
 
 	// Setup a subscriber
 	_, decoder, closeSub := helperSubscribeTopic(t, srv, defaultTopic)
@@ -242,12 +257,10 @@ func TestServerMultiConsumer(t *testing.T) {
 
 	// Publish
 	msg1 := "test_msg_1"
-	res := helperPublishMessage(t, srv, defaultTopic, msg1)
-	defer res.Body.Close()
+	helperPublishMessage(t, srv, defaultTopic, msg1)
 
 	msg2 := "test_msg_2"
-	res = helperPublishMessage(t, srv, defaultTopic, msg2)
-	defer res.Body.Close()
+	helperPublishMessage(t, srv, defaultTopic, msg2)
 
 	// Set up consumer 1
 	encoder1, decoder1, closeSub := helperSubscribeTopic(t, srv, defaultTopic)
@@ -269,12 +282,10 @@ func TestServerMultiConsumer(t *testing.T) {
 
 	// Publish again
 	msg3 := "test_msg_3"
-	res = helperPublishMessage(t, srv, defaultTopic, msg3)
-	defer res.Body.Close()
+	helperPublishMessage(t, srv, defaultTopic, msg3)
 
 	msg4 := "test_msg_4"
-	res = helperPublishMessage(t, srv, defaultTopic, msg4)
-	defer res.Body.Close()
+	helperPublishMessage(t, srv, defaultTopic, msg4)
 
 	// Consumer 1 sends back an ACK for its message
 	assert.NoError(encoder1.Encode(CmdAck))
@@ -301,8 +312,7 @@ func TestServerMultiConsumerConnectionLost(t *testing.T) {
 
 	// Publish once
 	msg1 := "test_msg_1"
-	res := helperPublishMessage(t, srv, defaultTopic, msg1)
-	defer res.Body.Close()
+	helperPublishMessage(t, srv, defaultTopic, msg1)
 
 	// Setup a subscriber
 	_, decoder1, closeSub1 := helperSubscribeTopic(t, srv, defaultTopic)
@@ -429,6 +439,10 @@ func helperPublishMessage(t *testing.T, srv *httptest.Server, topicName, msg str
 	res, err := srv.Client().Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusCreated, res.StatusCode)
+
+	t.Cleanup(func() {
+		res.Body.Close()
+	})
 
 	return res
 }
