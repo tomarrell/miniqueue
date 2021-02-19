@@ -68,6 +68,12 @@ Usage of ./miniqueue:
         port used to run the server (default 8080)
 ```
 
+Once running, MiniQueue will expose an HTTP/2 server capable of bidirectional
+streaming between client and server. Subscribers will be delivered incoming
+messages and can send commands `ACK`, `NACK`, `BACK` [etc](#commands). Upon a
+subscriber disconnecting, any outstanding messages are automatically `NACK`'ed
+and returned to the front of the queue.
+
 ##### Start miniqueue with human readable logs
 
 ```bash
