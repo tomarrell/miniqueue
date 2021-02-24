@@ -10,6 +10,7 @@ const (
 	eventTypePublish eventType = iota
 	eventTypeNack
 	eventTypeBack
+	eventTypeMsgReturned
 )
 
 type eventType int

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -130,7 +131,7 @@ func TestSubscribeAck(t *testing.T) {
 func TestServerPublishSubscribeAck(t *testing.T) {
 	assert := assert.New(t)
 
-	srv, srvCloser := helperNewTestServer(t)
+	srv, _, srvCloser := helperNewTestServer(t)
 	defer srvCloser()
 
 	// Publish
@@ -169,7 +170,7 @@ func TestServerPublishSubscribeAck(t *testing.T) {
 func TestServerNack(t *testing.T) {
 	assert := assert.New(t)
 
-	srv, srvCloser := helperNewTestServer(t)
+	srv, _, srvCloser := helperNewTestServer(t)
 	defer srvCloser()
 
 	msg1 := "test_msg_1"
@@ -190,7 +191,7 @@ func TestServerNack(t *testing.T) {
 func TestServerBack(t *testing.T) {
 	assert := assert.New(t)
 
-	srv, srvCloser := helperNewTestServer(t)
+	srv, _, srvCloser := helperNewTestServer(t)
 	defer srvCloser()
 
 	msg1 := "test_msg_1"
@@ -211,10 +212,35 @@ func TestServerBack(t *testing.T) {
 	assert.Equal(msg2, out.Msg)
 }
 
+func TestServerDack(t *testing.T) {
+	assert := assert.New(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	srv, hooks, srvCloser := helperNewTestServer(t)
+	defer srvCloser()
+	go hooks.b.ProcessDelays(ctx, 100*time.Millisecond)
+
+	msg1 := "test_msg_1"
+	helperPublishMessage(t, srv, defaultTopic, msg1)
+
+	enc, decoder, _ := helperSubscribeTopic(t, srv, defaultTopic)
+
+	var out subResponse
+	assert.NoError(decoder.Decode(&out))
+	assert.Equal(msg1, out.Msg)
+
+	assert.NoError(enc.Encode("DACK 1"))
+
+	assert.NoError(decoder.Decode(&out))
+	assert.Equal(msg1, out.Msg)
+}
+
 func TestServerConnectionLost(t *testing.T) {
 	assert := assert.New(t)
 
-	srv, srvCloser := helperNewTestServer(t)
+	srv, _, srvCloser := helperNewTestServer(t)
 	defer srvCloser()
 
 	// Publish twice
@@ -252,7 +278,7 @@ func TestServerConnectionLost(t *testing.T) {
 func TestServerMultiConsumer(t *testing.T) {
 	assert := assert.New(t)
 
-	srv, srvCloser := helperNewTestServer(t)
+	srv, _, srvCloser := helperNewTestServer(t)
 	defer srvCloser()
 
 	// Publish
@@ -307,7 +333,7 @@ func TestServerMultiConsumer(t *testing.T) {
 func TestServerMultiConsumerConnectionLost(t *testing.T) {
 	assert := assert.New(t)
 
-	srv, srvCloser := helperNewTestServer(t)
+	srv, _, srvCloser := helperNewTestServer(t)
 	defer srvCloser()
 
 	// Publish once
@@ -380,23 +406,25 @@ func BenchmarkPublish(b *testing.B) {
 // Helpers
 //
 
+type hooks struct {
+	b *broker
+}
+
 // Returns a new, started, httptest server and a corresponding function which
 // will force close connections and close the server when called.
-func helperNewTestServer(t *testing.T) (*httptest.Server, func()) {
+func helperNewTestServer(t *testing.T) (*httptest.Server, hooks, func()) {
 	t.Helper()
 
 	db, err := leveldb.Open(storage.NewMemStorage(), nil)
 	assert.NoError(t, err)
 
-	srv := httptest.NewUnstartedServer(newServer(newBroker(&store{
-		path: "",
-		db:   db,
-	})))
+	b := newBroker(&store{path: "", db: db})
+	srv := httptest.NewUnstartedServer(newServer(b))
 
 	srv.EnableHTTP2 = true
 	srv.StartTLS()
 
-	return srv, func() {
+	return srv, hooks{b}, func() {
 		srv.CloseClientConnections()
 		srv.Close()
 	}

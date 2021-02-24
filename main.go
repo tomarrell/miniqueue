@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -28,6 +30,7 @@ func main() {
 		tlsKeyPath    = flag.String("key", defaultKeyPath, "path to TLS key")
 		dbPath        = flag.String("db", defaultDBPath, "path to the db file")
 		logLevel      = flag.String("level", defaultLogLevel, "(disabled|debug|info)")
+		delayPeriod   = flag.Duration("period", time.Second, "period between runs to check and restore delayed messages")
 	)
 
 	flag.Parse()
@@ -62,7 +65,11 @@ func main() {
 			Msgf("no TLS key path specified, using default %s", defaultKeyPath)
 	}
 
-	srv := newServer(newBroker(newStore(*dbPath)))
+	ctx := context.Background()
+
+	b := newBroker(newStore(*dbPath))
+	go b.ProcessDelays(ctx, *delayPeriod)
+	srv := newServer(b)
 
 	// Start the server
 	p := fmt.Sprintf(":%d", *port)

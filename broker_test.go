@@ -17,6 +17,7 @@ func TestBrokerPublish(t *testing.T) {
 	)
 
 	mockStore := NewMockstorer(ctrl)
+	mockStore.EXPECT().Meta().Times(2).Return(&metadata{}, nil)
 	mockStore.EXPECT().Insert(topic, value)
 
 	b := newBroker(mockStore)
@@ -33,6 +34,7 @@ func TestBrokerSubscribe(t *testing.T) {
 	)
 
 	mockStore := NewMockstorer(ctrl)
+	mockStore.EXPECT().Meta().Return(&metadata{}, nil)
 
 	b := newBroker(mockStore)
 	c := b.Subscribe(topic)

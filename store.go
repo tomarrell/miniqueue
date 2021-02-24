@@ -19,6 +19,10 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
+type metadata struct {
+	topics []string
+}
+
 // storer should be safe for concurrent use.
 type storer interface {
 	// Insert inserts a new record for a given topic.
@@ -50,9 +54,13 @@ type storer interface {
 	// chronological delay order (those with soonest "done" time first).
 	GetDelayed(topic string) (delayedIterator, func() error)
 
-	// ReturnDelayed returns delayed messages with done times before the given time
-	// back to the main queue.
-	ReturnDelayed(topic string, before time.Time) error
+	// ReturnDelayed returns delayed messages with done times before the given
+	// time back to the main queue returning the number of messages returned or an
+	// error.
+	ReturnDelayed(topic string, before time.Time) (count int, err error)
+
+	// Meta returns the metadata of the database.
+	Meta() (*metadata, error)
 
 	// Close closes the store.
 	Close() error
@@ -65,7 +73,6 @@ type storer interface {
 const (
 	errTopicEmpty      = storeError("topic is empty")
 	errTopicNotExist   = storeError("topic does not exist")
-	errAckMsgNotExist  = storeError("msg to ack does not exist")
 	errNackMsgNotExist = storeError("msg to nack does not exist")
 	errBackMsgNotExist = storeError("msg to back does not exist")
 	errDackMsgNotExist = storeError("msg to dack does not exist")
@@ -382,6 +389,9 @@ type delayedIterator interface {
 // iterate over the currently waiting messages for a given topic in
 // chronological delay order (those with soonest "done" time first).
 func (s *store) GetDelayed(topic string) (iterator delayedIterator, closer func() error) {
+	s.Lock()
+	defer s.Unlock()
+
 	key := fmt.Sprintf(delayTopicPrefix, topic)
 	prefix := util.BytesPrefix([]byte(key))
 	iter := s.db.NewIterator(prefix, nil)
@@ -396,7 +406,10 @@ func (s *store) GetDelayed(topic string) (iterator delayedIterator, closer func(
 
 // ReturnDelayed returns delayed messages with done times before the given time
 // back to the main queue.
-func (s *store) ReturnDelayed(topic string, before time.Time) error {
+func (s *store) ReturnDelayed(topic string, before time.Time) (int, error) {
+	s.Lock()
+	defer s.Unlock()
+
 	key := fmt.Sprintf(delayTopicPrefix, topic)
 	prefix := util.BytesPrefix([]byte(key))
 	iter := s.db.NewIterator(prefix, nil)
@@ -404,8 +417,10 @@ func (s *store) ReturnDelayed(topic string, before time.Time) error {
 
 	tx, err := s.db.OpenTransaction()
 	if err != nil {
-		return fmt.Errorf("opening transaction: %v", err)
+		return 0, fmt.Errorf("opening transaction: %v", err)
 	}
+
+	count := 0
 
 	// For each record, check if the timestamp is earlier than the given cutoff,
 	// returning the record to the front of the main queue if it is.
@@ -417,18 +432,21 @@ func (s *store) ReturnDelayed(topic string, before time.Time) error {
 		delayTime, err := timeFromDelayKey(string(key))
 		if err != nil {
 			tx.Discard()
-			return err
+			return 0, err
 		}
 
+		// The message has passed the delay point so should be returned to the front
+		// of the main queue to be processed again.
 		if delayTime.Before(before) {
+			count++
 			val := iter.Value()
 			if _, err := prependValueTx(tx, topicFmt, headPosKeyFmt, topic, val); err != nil {
 				tx.Discard()
-				return err
+				return 0, err
 			}
 			if err := tx.Delete(key, nil); err != nil {
 				tx.Discard()
-				return err
+				return 0, err
 			}
 		} else {
 			// We've already reached a timestamp that is in the future, no need to
@@ -440,15 +458,29 @@ func (s *store) ReturnDelayed(topic string, before time.Time) error {
 	iter.Release()
 	if err := iter.Error(); err != nil {
 		tx.Discard()
-		return fmt.Errorf("iterating over delayed messages for topic %s: %v", topic, err)
+		return 0, fmt.Errorf("iterating over delayed messages for topic %s: %v", topic, err)
 	}
 
 	if err := tx.Commit(); err != nil {
 		tx.Discard()
-		return fmt.Errorf("committing nack transaction: %v", err)
+		return 0, fmt.Errorf("committing nack transaction: %v", err)
 	}
 
-	return nil
+	return count, nil
+}
+
+func (s *store) Meta() (*metadata, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	topics, err := getTopicMeta(s.db)
+	if err != nil {
+		return nil, err
+	}
+
+	return &metadata{
+		topics: topics,
+	}, nil
 }
 
 // Close the store.
@@ -756,6 +788,30 @@ func timeFromDelayKey(key string) (time.Time, error) {
 	return timestampTime, nil
 }
 
+func getTopicMeta(db *leveldb.DB) ([]string, error) {
+	var topics []string
+
+	key := []byte(metaTopics)
+	exists, err := db.Has(key, nil)
+	if err != nil {
+		return nil, fmt.Errorf("checking has %s: %v", key, err)
+	}
+	if !exists {
+		return []string{}, nil
+	}
+
+	val, err := db.Get(key, nil)
+	if err != nil {
+		return nil, fmt.Errorf("getting topics meta: %v", err)
+	}
+
+	if err := json.Unmarshal(val, &topics); err != nil {
+		return nil, fmt.Errorf("unmarshalling topics meta: %v", err)
+	}
+
+	return topics, nil
+}
+
 func addTopicMeta(db *leveldb.DB, topic string) error {
 	key := []byte(metaTopics)
 	topics := []string{topic}
@@ -772,7 +828,7 @@ func addTopicMeta(db *leveldb.DB, topic string) error {
 
 		var existingTopics []string
 		if err := json.Unmarshal(val, &topics); err != nil {
-			return fmt.Errorf("unmarshalling meta topics: %v", err)
+			return fmt.Errorf("unmarshalling topics meta: %v", err)
 		}
 
 		topics = append(existingTopics, topic)
@@ -780,11 +836,11 @@ func addTopicMeta(db *leveldb.DB, topic string) error {
 
 	val, err := json.Marshal(topics)
 	if err != nil {
-		return fmt.Errorf("marshalling meta topics: %v", err)
+		return fmt.Errorf("marshalling topics meta: %v", err)
 	}
 
 	if err := db.Put(key, val, nil); err != nil {
-		return fmt.Errorf("putting meta topics %s: %v", key, err)
+		return fmt.Errorf("putting topics meta %s: %v", key, err)
 	}
 
 	return nil

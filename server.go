@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gorilla/mux"
@@ -33,6 +34,10 @@ const (
 	// processed again after all the currently outstanding messages have been
 	// processed.
 	CmdBack = "BACK"
+	// CmdDack notifies the server that the outstanding message was not processed
+	// successfully and that it should be delayed by t seconds before being
+	// prepended to the front of the queue for reprocessing.
+	CmdDack = "DACK"
 )
 
 const (
@@ -183,7 +188,9 @@ func subscribe(broker brokerer) http.HandlerFunc {
 
 			log = log.With().Str("cmd", cmd).Logger()
 
-			switch cmd {
+			cmdArgs := strings.Split(cmd, " ")
+
+			switch cmdArgs[0] {
 			case CmdInit:
 				log.Debug().Msg("initialising consumer")
 
@@ -217,6 +224,31 @@ func subscribe(broker brokerer) http.HandlerFunc {
 				log.Debug().Msg("BACKing message")
 
 				if err := cons.Back(); err != nil {
+					log.Err(err).Msg("failed to BACK")
+					respondError(log, enc, errBack.Error())
+
+					return
+				}
+
+				handleConsumerNext(ctx, log, enc, cons)
+
+			case CmdDack:
+				log.Debug().Msg("DACKing message")
+
+				if len(cmdArgs) < 2 {
+					respondError(log, enc, "too few arguments provided to DACK")
+
+					return
+				}
+
+				seconds, err := strconv.Atoi(cmdArgs[1])
+				if err != nil {
+					respondError(log, enc, "invalid DACK duration argument at position [1]")
+
+					return
+				}
+
+				if err := cons.Dack(seconds); err != nil {
 					log.Err(err).Msg("failed to BACK")
 					respondError(log, enc, errBack.Error())
 

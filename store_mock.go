@@ -148,6 +148,21 @@ func (mr *MockstorerMockRecorder) Insert(topic, value interface{}) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Insert", reflect.TypeOf((*Mockstorer)(nil).Insert), topic, value)
 }
 
+// Meta mocks base method.
+func (m *Mockstorer) Meta() (*metadata, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Meta")
+	ret0, _ := ret[0].(*metadata)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Meta indicates an expected call of Meta.
+func (mr *MockstorerMockRecorder) Meta() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Meta", reflect.TypeOf((*Mockstorer)(nil).Meta))
+}
+
 // Nack mocks base method.
 func (m *Mockstorer) Nack(topic string, ackOffset int) error {
 	m.ctrl.T.Helper()
@@ -163,11 +178,12 @@ func (mr *MockstorerMockRecorder) Nack(topic, ackOffset interface{}) *gomock.Cal
 }
 
 // ReturnDelayed mocks base method.
-func (m *Mockstorer) ReturnDelayed(topic string, before time.Time) error {
+func (m *Mockstorer) ReturnDelayed(topic string, before time.Time) (int, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ReturnDelayed", topic, before)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // ReturnDelayed indicates an expected call of ReturnDelayed.

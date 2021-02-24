@@ -142,8 +142,7 @@ func TestAck_WithPos(t *testing.T) {
 	s := newStore(tmpDBPath).(*store)
 	t.Cleanup(s.Destroy)
 
-	err := s.Insert(defaultTopic, []byte("test_value_1"))
-	assert.NoError(t, err)
+	assert.NoError(t, s.Insert(defaultTopic, []byte("test_value_1")))
 
 	val, ackOffset, err := s.GetNext(defaultTopic)
 	assert.NoError(t, err)
@@ -354,16 +353,17 @@ func TestReturnDelayed(t *testing.T) {
 	msg1 := []byte("test_value_1")
 	msg2 := []byte("test_value_2")
 
-	s.Insert(defaultTopic, msg1)
-	s.Insert(defaultTopic, msg2)
+	assert.NoError(t, s.Insert(defaultTopic, msg1))
+	assert.NoError(t, s.Insert(defaultTopic, msg2))
 
 	_, offset, _ := s.GetNext(defaultTopic)
-	s.Dack(defaultTopic, offset, 1)
+	assert.NoError(t, s.Dack(defaultTopic, offset, 1))
 	_, offset, _ = s.GetNext(defaultTopic)
-	s.Dack(defaultTopic, offset, 3)
+	assert.NoError(t, s.Dack(defaultTopic, offset, 3))
 
-	now := time.Now().Add(time.Minute)
-	assert.NoError(t, s.ReturnDelayed(defaultTopic, now))
+	count, err := s.ReturnDelayed(defaultTopic, time.Now().Add(time.Minute))
+	assert.NoError(t, err)
+	assert.Equal(t, 2, count)
 }
 
 func TestReturnDelayed_ReturnToMainQueue(t *testing.T) {
@@ -382,7 +382,9 @@ func TestReturnDelayed_ReturnToMainQueue(t *testing.T) {
 	_, offset, _ = s.GetNext(defaultTopic)
 	assert.NoError(t, s.Dack(defaultTopic, offset, 3))
 
-	assert.NoError(t, s.ReturnDelayed(defaultTopic, time.Now().Add(time.Minute)))
+	count, err := s.ReturnDelayed(defaultTopic, time.Now().Add(time.Minute))
+	assert.NoError(t, err)
+	assert.Equal(t, 2, count)
 
 	b, _, err := s.GetNext(defaultTopic)
 	assert.NoError(t, err)
@@ -408,7 +410,9 @@ func TestReturnDelayed_ReturnSameTimeToMainQueue(t *testing.T) {
 	assert.NoError(t, s.Dack(defaultTopic, offset1, 1))
 	assert.NoError(t, s.Dack(defaultTopic, offset2, 1))
 
-	assert.NoError(t, s.ReturnDelayed(defaultTopic, time.Now().Add(time.Minute)))
+	count, err := s.ReturnDelayed(defaultTopic, time.Now().Add(time.Minute))
+	assert.NoError(t, err)
+	assert.Equal(t, 2, count)
 
 	b, _, err := s.GetNext(defaultTopic)
 	assert.NoError(t, err)
