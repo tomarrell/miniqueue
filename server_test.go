@@ -212,6 +212,48 @@ func TestServerBack(t *testing.T) {
 	assert.Equal(msg2, out.Msg)
 }
 
+func TestServerDack_MissingArg(t *testing.T) {
+	assert := assert.New(t)
+
+	srv, _, srvCloser := helperNewTestServer(t)
+	defer srvCloser()
+
+	msg1 := "test_msg_1"
+	helperPublishMessage(t, srv, defaultTopic, msg1)
+
+	enc, decoder, _ := helperSubscribeTopic(t, srv, defaultTopic)
+
+	var out subResponse
+	assert.NoError(decoder.Decode(&out))
+	assert.Equal(msg1, out.Msg)
+
+	assert.NoError(enc.Encode("DACK"))
+
+	assert.NoError(decoder.Decode(&out))
+	assert.Contains(out.Error, "too few arguments")
+}
+
+func TestServerDack_InvalidArg(t *testing.T) {
+	assert := assert.New(t)
+
+	srv, _, srvCloser := helperNewTestServer(t)
+	defer srvCloser()
+
+	msg1 := "test_msg_1"
+	helperPublishMessage(t, srv, defaultTopic, msg1)
+
+	enc, decoder, _ := helperSubscribeTopic(t, srv, defaultTopic)
+
+	var out subResponse
+	assert.NoError(decoder.Decode(&out))
+	assert.Equal(msg1, out.Msg)
+
+	assert.NoError(enc.Encode("DACK oops"))
+
+	assert.NoError(decoder.Decode(&out))
+	assert.Contains(out.Error, "invalid DACK duration argument")
+}
+
 func TestServerDack(t *testing.T) {
 	assert := assert.New(t)
 
