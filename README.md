@@ -64,8 +64,13 @@ Usage of ./miniqueue:
         human readable logging output
   -key string
         path to TLS key (default "./testdata/localhost-key.pem")
+  -level string
+        (disabled|debug|info) (default "debug")
+  -period duration
+        period between runs to check and restore delayed messages (default 1s)
   -port int
         port used to run the server (default 8080)
+
 ```
 
 Once running, MiniQueue will expose an HTTP/2 server capable of bidirectional
