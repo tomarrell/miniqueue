@@ -41,7 +41,10 @@ func (b *broker) ProcessDelays(ctx context.Context, period time.Duration) {
 	for {
 		now := time.Now()
 
-		for _, t := range b.meta.topics {
+		b.RLock()
+		topics := b.meta.topics
+		b.RUnlock()
+		for _, t := range topics {
 			count, err := b.store.ReturnDelayed(t, now)
 			if err != nil {
 				log.Err(err).Msg("returning delayed messages to main queue")
