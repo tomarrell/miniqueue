@@ -114,6 +114,11 @@ Available commands are:
     returned to the *back* of the queue. This will cause it to be processed
     again after the currently waiting messages.
 
+- `"DACK [seconds]"`: Negatively acknowledges the current message, placing it on
+    a delay for a certain number of `seconds`. Once the delay expires, on the
+    next tick given by the `-period` flag, the message will be returned to the
+    front of the queue to be processed as soon as possible.
+
 ## Benchmarks
 
 As MiniQueue is still under development, take these benchmarks with a grain of
