@@ -13,7 +13,7 @@ func TestBrokerPublish(t *testing.T) {
 
 	var (
 		topic = "test_topic"
-		value = []byte("test_value")
+		value = newValue([]byte("test_value"))
 	)
 
 	mockStore := NewMockstorer(ctrl)

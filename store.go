@@ -26,11 +26,11 @@ type metadata struct {
 // storer should be safe for concurrent use.
 type storer interface {
 	// Insert inserts a new record for a given topic.
-	Insert(topic string, value value) error
+	Insert(topic string, val *value) error
 
 	// GetNext will retrieve the next value in the topic, as well as the AckKey
 	// allowing future acking/nacking of the value.
-	GetNext(topic string) (val value, ackOffset int, err error)
+	GetNext(topic string) (val *value, ackOffset int, err error)
 
 	// Ack will acknowledge the processing of a message, removing it from the
 	// topic entirely.
@@ -241,7 +241,7 @@ func (s *store) Back(topic string, ackOffset int) error {
 // Insert creates a new record for a given topic, creating the topic in the
 // store if it doesn't already exist. If it does, the record is placed at the
 // end of the queue.
-func (s *store) Insert(topic string, value value) error {
+func (s *store) Insert(topic string, val *value) error {
 	s.Lock()
 	defer s.Unlock()
 
@@ -256,7 +256,7 @@ func (s *store) Insert(topic string, value value) error {
 
 	// The key already exists
 	if exists {
-		if _, err := appendValue(s.db, topicFmt, tailPosKeyFmt, topic, value); err != nil {
+		if _, err := appendValue(s.db, topicFmt, tailPosKeyFmt, topic, val); err != nil {
 			return err
 		}
 
@@ -294,7 +294,13 @@ func (s *store) Insert(topic string, value value) error {
 
 	// Write new message to head
 	newKey := []byte(fmt.Sprintf(topicFmt, topic, 0))
-	if err := s.db.Put(newKey, value, nil); err != nil {
+
+	b, err := val.Encode()
+	if err != nil {
+		return fmt.Errorf("encoding value: %v", err)
+	}
+
+	if err := s.db.Put(newKey, b, nil); err != nil {
 		return fmt.Errorf("putting first value for topic: %v", err)
 	}
 
@@ -303,7 +309,7 @@ func (s *store) Insert(topic string, value value) error {
 
 // GetNext retrieves the first record for a topic, incrementing the head
 // position of the main array and pushing the value onto the ack array.
-func (s *store) GetNext(topic string) (value, int, error) {
+func (s *store) GetNext(topic string) (*value, int, error) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -440,7 +446,13 @@ func (s *store) ReturnDelayed(topic string, before time.Time) (int, error) {
 		if delayTime.Before(before) {
 			count++
 			val := iter.Value()
-			if _, err := prependValueTx(tx, topicFmt, headPosKeyFmt, topic, val); err != nil {
+
+			v, err := decodeValue(val)
+			if err != nil {
+				return 0, err
+			}
+
+			if _, err := prependValueTx(tx, topicFmt, headPosKeyFmt, topic, v); err != nil {
 				tx.Discard()
 				return 0, err
 			}
@@ -494,7 +506,7 @@ func (s *store) Destroy() {
 	_ = os.RemoveAll(s.path)
 }
 
-func insertDelay(db *leveldb.DB, topic string, val value, delaySeconds int) error {
+func insertDelay(db *leveldb.DB, topic string, val *value, delaySeconds int) error {
 	delayTo := time.Now().Unix() + int64(delaySeconds)
 
 	var (
@@ -516,14 +528,19 @@ func insertDelay(db *leveldb.DB, topic string, val value, delaySeconds int) erro
 		localOffset++
 	}
 
-	if err := db.Put([]byte(key), val, nil); err != nil {
+	b, err := val.Encode()
+	if err != nil {
+		return fmt.Errorf("encoding value: %v", err)
+	}
+
+	if err := db.Put([]byte(key), b, nil); err != nil {
 		return fmt.Errorf("putting value: %v", err)
 	}
 
 	return nil
 }
 
-func insertDelayTx(tx *leveldb.Transaction, topic string, val value, delaySeconds int) error {
+func insertDelayTx(tx *leveldb.Transaction, topic string, val *value, delaySeconds int) error {
 	delayTo := time.Now().Unix() + int64(delaySeconds)
 
 	var (
@@ -545,7 +562,12 @@ func insertDelayTx(tx *leveldb.Transaction, topic string, val value, delaySecond
 		localOffset++
 	}
 
-	if err := tx.Put([]byte(key), val, nil); err != nil {
+	b, err := val.Encode()
+	if err != nil {
+		return fmt.Errorf("encoding value: %v", err)
+	}
+
+	if err := tx.Put([]byte(key), b, nil); err != nil {
 		return fmt.Errorf("putting value: %v", err)
 	}
 
@@ -553,7 +575,7 @@ func insertDelayTx(tx *leveldb.Transaction, topic string, val value, delaySecond
 }
 
 // getOffset retrieves a record for a topic with a specific offset.
-func getOffset(db *leveldb.DB, topicFmt string, topic string, offset int) (value, error) {
+func getOffset(db *leveldb.DB, topicFmt string, topic string, offset int) (*value, error) {
 	key := fmt.Sprintf(topicFmt, topic, offset)
 
 	val, err := db.Get([]byte(key), nil)
@@ -561,11 +583,16 @@ func getOffset(db *leveldb.DB, topicFmt string, topic string, offset int) (value
 		return nil, err
 	}
 
-	return val, nil
+	v, err := decodeValue(val)
+	if err != nil {
+		return nil, err
+	}
+
+	return v, nil
 }
 
 // getOffsetTx retrieves a record for a topic with a specific offset.
-func getOffsetTx(db *leveldb.Transaction, topicFmt string, topic string, offset int) (value, error) {
+func getOffsetTx(db *leveldb.Transaction, topicFmt string, topic string, offset int) (*value, error) {
 	key := fmt.Sprintf(topicFmt, topic, offset)
 
 	val, err := db.Get([]byte(key), nil)
@@ -573,7 +600,12 @@ func getOffsetTx(db *leveldb.Transaction, topicFmt string, topic string, offset 
 		return nil, err
 	}
 
-	return val, nil
+	v, err := decodeValue(val)
+	if err != nil {
+		return nil, err
+	}
+
+	return v, nil
 }
 
 // getPos gets the integer position value (aka offset) for topic and key format.
@@ -617,7 +649,7 @@ func getPosTx(tx *leveldb.Transaction, topicFmt string, topic string) (int, erro
 }
 
 // getValue returns the raw value stored given a key format, topic and offset.
-func getValue(db *leveldb.DB, topicFmt string, topic string, offset int) (value, error) {
+func getValue(db *leveldb.DB, topicFmt string, topic string, offset int) (*value, error) {
 	key := fmt.Sprintf(topicFmt, topic, offset)
 
 	val, err := db.Get([]byte(key), nil)
@@ -628,12 +660,17 @@ func getValue(db *leveldb.DB, topicFmt string, topic string, offset int) (value,
 		return nil, fmt.Errorf("getting value with fmt [%s] from topic %s at offset %d: %v", topicFmt, topic, offset, err)
 	}
 
-	return val, nil
+	v, err := decodeValue(val)
+	if err != nil {
+		return nil, err
+	}
+
+	return v, nil
 }
 
 // appendValue returns inserts a new value to the end of a topic given,
 // returning the inserted offset.
-func appendValue(db *leveldb.DB, topicFmt, tailPosKeyFmt, topic string, val value) (offset int, err error) {
+func appendValue(db *leveldb.DB, topicFmt, tailPosKeyFmt, topic string, val *value) (offset int, err error) {
 	tailPosKey := []byte(fmt.Sprintf(tailPosKeyFmt, topic))
 
 	// Fetch the current tail position
@@ -650,7 +687,12 @@ func appendValue(db *leveldb.DB, topicFmt, tailPosKeyFmt, topic string, val valu
 	// Write new record to next tail position
 	newKey := []byte(fmt.Sprintf(topicFmt, topic, origOffset))
 
-	if err := db.Put(newKey, val, nil); err != nil {
+	b, err := val.Encode()
+	if err != nil {
+		return 0, fmt.Errorf("encoding value: %v", err)
+	}
+
+	if err := db.Put(newKey, b, nil); err != nil {
 		return 0, fmt.Errorf("putting value: %v", err)
 	}
 
@@ -666,7 +708,7 @@ func appendValue(db *leveldb.DB, topicFmt, tailPosKeyFmt, topic string, val valu
 
 // appendValueTx returns inserts a new value to the end of a topic given,
 // returning the inserted offset.
-func appendValueTx(tx *leveldb.Transaction, topicFmt, tailPosKeyFmt, topic string, val value) (offset int, err error) {
+func appendValueTx(tx *leveldb.Transaction, topicFmt, tailPosKeyFmt, topic string, val *value) (offset int, err error) {
 	tailPosKey := []byte(fmt.Sprintf(tailPosKeyFmt, topic))
 
 	// Fetch the current tail position
@@ -683,7 +725,12 @@ func appendValueTx(tx *leveldb.Transaction, topicFmt, tailPosKeyFmt, topic strin
 	// Write new record to next tail position
 	newKey := []byte(fmt.Sprintf(topicFmt, topic, origOffset))
 
-	if err := tx.Put(newKey, val, nil); err != nil {
+	b, err := val.Encode()
+	if err != nil {
+		return 0, fmt.Errorf("encoding value: %v", err)
+	}
+
+	if err := tx.Put(newKey, b, nil); err != nil {
 		return 0, fmt.Errorf("putting value: %v", err)
 	}
 
@@ -699,7 +746,7 @@ func appendValueTx(tx *leveldb.Transaction, topicFmt, tailPosKeyFmt, topic strin
 
 // prependValueTx inserts a value to the head of a topic, decrementing the head
 // position and returning the offset of the prepended value.
-func prependValueTx(tx *leveldb.Transaction, topicFmt, headPosKeyFmt, topic string, val value) (offset int, err error) {
+func prependValueTx(tx *leveldb.Transaction, topicFmt, headPosKeyFmt, topic string, val *value) (offset int, err error) {
 	headPosKey := []byte(fmt.Sprintf(headPosKeyFmt, topic))
 
 	// Fetch the current head position
@@ -717,7 +764,12 @@ func prependValueTx(tx *leveldb.Transaction, topicFmt, headPosKeyFmt, topic stri
 	newHeadOffset := headOffset - 1
 	newKey := []byte(fmt.Sprintf(topicFmt, topic, newHeadOffset))
 
-	if err := tx.Put(newKey, val, nil); err != nil {
+	b, err := val.Encode()
+	if err != nil {
+		return 0, fmt.Errorf("encoding value: %v", err)
+	}
+
+	if err := tx.Put(newKey, b, nil); err != nil {
 		return 0, fmt.Errorf("putting value: %v", err)
 	}
 

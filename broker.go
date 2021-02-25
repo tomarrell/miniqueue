@@ -10,8 +10,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type value = []byte
-
 type broker struct {
 	meta      *metadata
 	store     storer
@@ -70,7 +68,7 @@ func (b *broker) ProcessDelays(ctx context.Context, period time.Duration) {
 }
 
 // Publish a message to a topic.
-func (b *broker) Publish(topic string, val value) error {
+func (b *broker) Publish(topic string, val *value) error {
 	if err := b.store.Insert(topic, val); err != nil {
 		return err
 	}

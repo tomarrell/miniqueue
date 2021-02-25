@@ -27,13 +27,13 @@ func TestPublishSingleMessage(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	msg := "test_value"
+	msg := newValue([]byte("test_value"))
 
 	mockBroker := NewMockbrokerer(ctrl)
-	mockBroker.EXPECT().Publish(defaultTopic, []byte(msg))
+	mockBroker.EXPECT().Publish(defaultTopic, msg)
 
 	rec := NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/publish/%s", defaultTopic), strings.NewReader(msg))
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/publish/%s", defaultTopic), bytes.NewReader(msg.Raw))
 
 	srv := newServer(mockBroker)
 	srv.ServeHTTP(rec, req)
@@ -71,7 +71,7 @@ func TestSubscribeSingleMessage(t *testing.T) {
 	// Read the first message
 	var out subResponse
 	assert.NoError(decoder.WaitAndDecode(&out))
-	assert.Equal(msg, out.Msg)
+	assert.Equal(msg, string(out.Msg))
 }
 
 func TestSubscribeAck(t *testing.T) {
@@ -120,12 +120,12 @@ func TestSubscribeAck(t *testing.T) {
 	// Read the first message, expect the first item published to the topic
 	var out subResponse
 	assert.NoError(decoder.WaitAndDecode(&out))
-	assert.Equal(msg1, out.Msg)
+	assert.Equal(msg1, string(out.Msg))
 
 	// Send an ACK back to the server, expect it to reply with next msg
 	assert.NoError(encoder.Encode(CmdAck))
 	assert.NoError(decoder.WaitAndDecode(&out))
-	assert.Equal(msg2, out.Msg)
+	assert.Equal(msg2, string(out.Msg))
 }
 
 func TestServerPublishSubscribeAck(t *testing.T) {
@@ -145,7 +145,7 @@ func TestServerPublishSubscribeAck(t *testing.T) {
 	// Consume message
 	var out subResponse
 	assert.NoError(decoder.Decode(&out))
-	assert.Equal(msg1, out.Msg)
+	assert.Equal(msg1, string(out.Msg))
 
 	// Send back and ACK
 	assert.NoError(encoder.Encode(CmdAck))
@@ -161,7 +161,7 @@ func TestServerPublishSubscribeAck(t *testing.T) {
 
 	// Read again from the queue, expect the new message
 	assert.NoError(decoder.Decode(&out))
-	assert.Equal(msg2, out.Msg)
+	assert.Equal(msg2, string(out.Msg))
 
 	// Send back and ACK
 	assert.NoError(encoder.Encode(CmdAck))
@@ -180,12 +180,12 @@ func TestServerNack(t *testing.T) {
 
 	var out subResponse
 	assert.NoError(decoder.Decode(&out))
-	assert.Equal(msg1, out.Msg)
+	assert.Equal(msg1, string(out.Msg))
 
 	assert.NoError(enc.Encode("NACK"))
 
 	assert.NoError(decoder.Decode(&out))
-	assert.Equal(msg1, out.Msg)
+	assert.Equal(msg1, string(out.Msg))
 }
 
 func TestServerBack(t *testing.T) {
@@ -204,12 +204,12 @@ func TestServerBack(t *testing.T) {
 
 	var out subResponse
 	assert.NoError(decoder.Decode(&out))
-	assert.Equal(msg1, out.Msg)
+	assert.Equal(msg1, string(out.Msg))
 
 	assert.NoError(enc.Encode("BACK"))
 
 	assert.NoError(decoder.Decode(&out))
-	assert.Equal(msg2, out.Msg)
+	assert.Equal(msg2, string(out.Msg))
 }
 
 func TestServerDack_MissingArg(t *testing.T) {
@@ -225,7 +225,7 @@ func TestServerDack_MissingArg(t *testing.T) {
 
 	var out subResponse
 	assert.NoError(decoder.Decode(&out))
-	assert.Equal(msg1, out.Msg)
+	assert.Equal(msg1, string(out.Msg))
 
 	assert.NoError(enc.Encode("DACK"))
 
@@ -246,7 +246,7 @@ func TestServerDack_InvalidArg(t *testing.T) {
 
 	var out subResponse
 	assert.NoError(decoder.Decode(&out))
-	assert.Equal(msg1, out.Msg)
+	assert.Equal(msg1, string(out.Msg))
 
 	assert.NoError(enc.Encode("DACK oops"))
 
@@ -271,12 +271,12 @@ func TestServerDack(t *testing.T) {
 
 	var out subResponse
 	assert.NoError(decoder.Decode(&out))
-	assert.Equal(msg1, out.Msg)
+	assert.Equal(msg1, string(out.Msg))
 
 	assert.NoError(enc.Encode("DACK 1"))
 
 	assert.NoError(decoder.Decode(&out))
-	assert.Equal(msg1, out.Msg)
+	assert.Equal(msg1, string(out.Msg))
 }
 
 func TestServerConnectionLost(t *testing.T) {
@@ -298,7 +298,7 @@ func TestServerConnectionLost(t *testing.T) {
 	// Consume message
 	var out subResponse
 	assert.NoError(decoder.Decode(&out))
-	assert.Equal(msg1, out.Msg)
+	assert.Equal(msg1, string(out.Msg))
 
 	// *Unexpectedly* close the connection
 	closeSub()
@@ -314,7 +314,7 @@ func TestServerConnectionLost(t *testing.T) {
 	// Expect the first message to be sent again as it was not acked
 	out = subResponse{}
 	assert.NoError(decoder.Decode(&out))
-	assert.Equal(msg1, out.Msg)
+	assert.Equal(msg1, string(out.Msg))
 }
 
 func TestServerMultiConsumer(t *testing.T) {
@@ -341,12 +341,12 @@ func TestServerMultiConsumer(t *testing.T) {
 	// Read from consumer 1
 	var out1 subResponse
 	assert.NoError(decoder1.Decode(&out1))
-	assert.Equal(msg1, out1.Msg)
+	assert.Equal(msg1, string(out1.Msg))
 
 	// Read from consumer 2
 	var out2 subResponse
 	assert.NoError(decoder2.Decode(&out2))
-	assert.Equal(msg2, out2.Msg)
+	assert.Equal(msg2, string(out2.Msg))
 
 	// Publish again
 	msg3 := "test_msg_3"
@@ -361,7 +361,7 @@ func TestServerMultiConsumer(t *testing.T) {
 	// It should receive the first message which has just been published
 	var out3 subResponse
 	assert.NoError(decoder1.Decode(&out3))
-	assert.Equal(msg3, out3.Msg)
+	assert.Equal(msg3, string(out3.Msg))
 
 	// Consumer 2 sends back an ACK for its message
 	assert.NoError(encoder2.Encode(CmdAck))
@@ -369,7 +369,7 @@ func TestServerMultiConsumer(t *testing.T) {
 	// It should receive the second message that was published
 	var out4 subResponse
 	assert.NoError(decoder2.Decode(&out4))
-	assert.Equal(msg4, out4.Msg)
+	assert.Equal(msg4, string(out4.Msg))
 }
 
 func TestServerMultiConsumerConnectionLost(t *testing.T) {
@@ -395,14 +395,14 @@ func TestServerMultiConsumerConnectionLost(t *testing.T) {
 		// Expect the first message to be sent again as it was not acked
 		var out subResponse
 		assert.NoError(decoder2.Decode(&out))
-		assert.Equal(msg1, out.Msg)
+		assert.Equal(msg1, string(out.Msg))
 		done <- struct{}{}
 	}()
 
 	// Consume message
 	var out subResponse
 	assert.NoError(decoder1.Decode(&out))
-	assert.Equal(msg1, out.Msg)
+	assert.Equal(msg1, string(out.Msg))
 
 	// *Unexpectedly* close the connection
 	closeSub1()

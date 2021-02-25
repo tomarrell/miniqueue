@@ -34,7 +34,7 @@ func (m *Mockbrokerer) EXPECT() *MockbrokererMockRecorder {
 }
 
 // Publish mocks base method.
-func (m *Mockbrokerer) Publish(topic string, value value) error {
+func (m *Mockbrokerer) Publish(topic string, value *value) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Publish", topic, value)
 	ret0, _ := ret[0].(error)

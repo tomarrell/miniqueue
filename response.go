@@ -7,13 +7,15 @@ import (
 )
 
 type subResponse struct {
-	Msg   string `json:"msg,omitempty"`
-	Error string `json:"error,omitempty"`
+	Msg       []byte `json:"msg,omitempty"`
+	DackCount int    `json:"dackCount,omitempty"`
+	Error     string `json:"error,omitempty"`
 }
 
-func respondMsg(log zerolog.Logger, e *json.Encoder, msg []byte) {
+func respondMsg(log zerolog.Logger, e *json.Encoder, val *value) {
 	res := subResponse{
-		Msg: string(msg),
+		Msg:       val.Raw,
+		DackCount: val.DackCount,
 	}
 
 	if err := e.Encode(res); err != nil {

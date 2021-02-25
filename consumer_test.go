@@ -15,8 +15,8 @@ func TestConsumerNext(t *testing.T) {
 
 	var (
 		topic = "test_topic"
-		msg1  = []byte("message1")
-		msg2  = []byte("message2")
+		msg1  = newValue([]byte("message1"))
+		msg2  = newValue([]byte("message2"))
 	)
 
 	mockStore := NewMockstorer(ctrl)

@@ -119,10 +119,10 @@ func (mr *MockstorerMockRecorder) GetDelayed(topic interface{}) *gomock.Call {
 }
 
 // GetNext mocks base method.
-func (m *Mockstorer) GetNext(topic string) (value, int, error) {
+func (m *Mockstorer) GetNext(topic string) (*value, int, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetNext", topic)
-	ret0, _ := ret[0].(value)
+	ret0, _ := ret[0].(*value)
 	ret1, _ := ret[1].(int)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
@@ -135,17 +135,17 @@ func (mr *MockstorerMockRecorder) GetNext(topic interface{}) *gomock.Call {
 }
 
 // Insert mocks base method.
-func (m *Mockstorer) Insert(topic string, value value) error {
+func (m *Mockstorer) Insert(topic string, val *value) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Insert", topic, value)
+	ret := m.ctrl.Call(m, "Insert", topic, val)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Insert indicates an expected call of Insert.
-func (mr *MockstorerMockRecorder) Insert(topic, value interface{}) *gomock.Call {
+func (mr *MockstorerMockRecorder) Insert(topic, val interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Insert", reflect.TypeOf((*Mockstorer)(nil).Insert), topic, value)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Insert", reflect.TypeOf((*Mockstorer)(nil).Insert), topic, val)
 }
 
 // Meta mocks base method.

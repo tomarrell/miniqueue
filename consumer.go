@@ -31,7 +31,7 @@ type consumer struct {
 
 // Next will attempt to retrieve the next value on the topic, or it will
 // block waiting for a msg indicating there is a new value available.
-func (c *consumer) Next(ctx context.Context) (val value, err error) {
+func (c *consumer) Next(ctx context.Context) (val *value, err error) {
 	val, ao, err := c.store.GetNext(c.topic)
 	if errors.Is(err, errTopicEmpty) {
 		select {

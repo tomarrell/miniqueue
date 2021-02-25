@@ -59,7 +59,7 @@ func (e serverError) Error() string {
 }
 
 type brokerer interface {
-	Publish(topic string, value value) error
+	Publish(topic string, value *value) error
 	Subscribe(topic string) *consumer
 }
 
@@ -118,7 +118,9 @@ func publish(broker brokerer) http.HandlerFunc {
 		}
 		defer r.Body.Close()
 
-		if err := broker.Publish(topic, b); err != nil {
+		newValue := newValue(b)
+
+		if err := broker.Publish(topic, newValue); err != nil {
 			log.Err(err).Msg("failed to publish to broker")
 
 			w.WriteHeader(http.StatusInternalServerError)
@@ -269,7 +271,7 @@ func subscribe(broker brokerer) http.HandlerFunc {
 // handleConsumerNext attempts to retrieve the next value from the consumer,
 // handling any errors that may occur and responding to the client accordingly.
 func handleConsumerNext(ctx context.Context, log zerolog.Logger, enc *json.Encoder, cons *consumer) {
-	msg, err := cons.Next(ctx)
+	val, err := cons.Next(ctx)
 	switch {
 	case errors.Is(err, errRequestCancelled):
 		log.Info().Msg("client disconnected while waiting for message")
@@ -281,10 +283,10 @@ func handleConsumerNext(ctx context.Context, log zerolog.Logger, enc *json.Encod
 
 		return
 	default:
-		respondMsg(log, enc, msg)
+		respondMsg(log, enc, val)
 
 		log.Debug().
-			Str("msg", string(msg)).
+			Str("msg", string(val.Raw)).
 			Msg("written message to client")
 	}
 }
