@@ -16,16 +16,16 @@ published, nothing more.
 
 ## Features
 
-- Simple to run
-- Very fast
-- Not infinitely scalable
-- Multiple topics
-- HTTP/2
-- Publish
-- Subscribe
-- Acknowledgements
-- Persistent
-- Prometheus metrics
+- ✅ Simple to run
+- 🚀 Very fast, see [benchmarks](#benchmarks)
+- 📈 Not infinitely scalable
+- 📜 Multiple topics
+- ✨ HTTP/2
+- ✉️  Publish
+- 📩 Subscribe
+- 🧾 Acknowledgements
+- 🛡️ Persistent
+- 🛠️ Prometheus metrics [WIP]
 
 ## API
 
@@ -38,7 +38,7 @@ published, nothing more.
 - POST `/subscribe/:topic` - streams messages separated by `\n`
 
   - `client → server: "INIT"`
-  - `server → client: { "msg": "...", "error": "..." }`
+  - `server → client: { "msg": "...", "error": "...", dackCount: 1 }`
   - `client → server: "ACK"`
 
 You can also find example usage in the `./examples/` directory.
@@ -123,6 +123,10 @@ Available commands are:
     a delay for a certain number of `seconds`. Once the delay expires, on the
     next tick given by the `-period` flag, the message will be returned to the
     front of the queue to be processed as soon as possible.
+
+    DACK'ed messages will contain a `dackCount` key when consumed. This allows
+    for doing exponential backoff for the same message if multiple failures
+    occur.
 
 ## Benchmarks
 
