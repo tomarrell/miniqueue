@@ -38,7 +38,7 @@ published, nothing more.
 - POST `/subscribe/:topic` - streams messages separated by `\n`
 
   - `client → server: "INIT"`
-  - `server → client: { "msg": "...", "error": "...", dackCount: 1 }`
+  - `server → client: { "msg": [base64], "error": "...", dackCount: 1 }`
   - `client → server: "ACK"`
 
 You can also find example usage in the `./examples/` directory.
@@ -78,6 +78,25 @@ streaming between client and server. Subscribers will be delivered incoming
 messages and can send commands `ACK`, `NACK`, `BACK` [etc](#commands). Upon a
 subscriber disconnecting, any outstanding messages are automatically `NACK`'ed
 and returned to the front of the queue.
+
+Messages sent to subscribers are JSON encoded, containing additional information
+in some cases to enable certain features. The consumer payload looks like: 
+
+```json
+{
+  "msg": "dGVzdA==", // base64 encoded message
+  "dackCount": 2,    // Integer
+}
+```
+
+In case of an error, the payload will be:
+```json
+{
+  "error": "uh oh, something went wrong"
+}
+```
+
+To get you started, here are some common ways to get up and running with `miniqueue`.
 
 ##### Start miniqueue with human readable logs
 
