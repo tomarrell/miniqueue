@@ -365,6 +365,8 @@ func (s *store) Dack(topic string, ackOffset int, delaySeconds int) error {
 		return fmt.Errorf("getting ack msg from topic %s at offset %d: %v", topic, ackOffset, err)
 	}
 
+	val.DackCount++
+
 	if err := insertDelayTx(tx, topic, val, delaySeconds); err != nil {
 		tx.Discard()
 		return fmt.Errorf("inserting ack msg into delay topic from topic %s at offset %d: %v", topic, ackOffset, err)

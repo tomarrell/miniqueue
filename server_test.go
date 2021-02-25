@@ -272,11 +272,13 @@ func TestServerDack(t *testing.T) {
 	var out subResponse
 	assert.NoError(decoder.Decode(&out))
 	assert.Equal(msg1, string(out.Msg))
+	assert.Equal(0, out.DackCount)
 
 	assert.NoError(enc.Encode("DACK 1"))
 
 	assert.NoError(decoder.Decode(&out))
 	assert.Equal(msg1, string(out.Msg))
+	assert.Equal(1, out.DackCount)
 }
 
 func TestServerConnectionLost(t *testing.T) {

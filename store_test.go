@@ -406,10 +406,12 @@ func TestReturnDelayed_ReturnToMainQueue(t *testing.T) {
 
 	b, _, err := s.GetNext(defaultTopic)
 	assert.NoError(t, err)
+	msg2.DackCount = 1
 	assert.Equal(t, msg2, b)
 
 	b, _, err = s.GetNext(defaultTopic)
 	assert.NoError(t, err)
+	msg1.DackCount = 1
 	assert.Equal(t, msg1, b)
 }
 
@@ -434,10 +436,47 @@ func TestReturnDelayed_ReturnSameTimeToMainQueue(t *testing.T) {
 
 	b, _, err := s.GetNext(defaultTopic)
 	assert.NoError(t, err)
+	msg2.DackCount = 1
 	assert.Equal(t, msg2, b)
 
 	b, _, err = s.GetNext(defaultTopic)
 	assert.NoError(t, err)
+	msg1.DackCount = 1
+	assert.Equal(t, msg1, b)
+}
+
+func TestReturnDelayed_ReturnedMultipleTimes(t *testing.T) {
+	s := newStore(tmpDBPath).(*store)
+	t.Cleanup(s.Destroy)
+
+	msg1 := newValue([]byte("test_value_1"))
+
+	assert.NoError(t, s.Insert(defaultTopic, msg1))
+
+	_, offset, _ := s.GetNext(defaultTopic)
+	assert.NoError(t, s.Dack(defaultTopic, offset, 1))
+
+	// Return the message to the main queue
+	count, err := s.ReturnDelayed(defaultTopic, time.Now().Add(time.Minute))
+	assert.NoError(t, err)
+	assert.Equal(t, 1, count)
+
+	b, offset, err := s.GetNext(defaultTopic)
+	assert.NoError(t, err)
+	msg1.DackCount = 1
+	assert.Equal(t, msg1, b)
+
+	// DACK the same message again
+	assert.NoError(t, s.Dack(defaultTopic, offset, 1))
+
+	// Return it, again
+	count, err = s.ReturnDelayed(defaultTopic, time.Now().Add(time.Minute))
+	assert.NoError(t, err)
+	assert.Equal(t, 1, count)
+
+	b, _, err = s.GetNext(defaultTopic)
+	assert.NoError(t, err)
+	msg1.DackCount = 2
 	assert.Equal(t, msg1, b)
 }
 
