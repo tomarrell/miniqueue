@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -112,7 +113,7 @@ restart:
 				continue restart
 			}
 
-			log.Printf("consumed message: %s\n", out.Msg)
+			log.Printf("consumed message: %s\n", mustBase64Decode(out.Msg))
 
 			if !*validate {
 				t := time.Duration(rand.Intn(5)) * time.Second
@@ -121,7 +122,7 @@ restart:
 			}
 
 			if *validate {
-				c, _ := strconv.Atoi(out.Msg)
+				c, _ := strconv.Atoi(mustBase64Decode(out.Msg))
 				if c != n {
 					panic("uh oh")
 				}
@@ -138,4 +139,13 @@ restart:
 			_ = enc.Encode("ACK")
 		}
 	}
+}
+
+func mustBase64Decode(b string) string {
+	s, err := base64.StdEncoding.DecodeString(string(b))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return string(s)
 }

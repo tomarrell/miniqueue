@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -73,6 +74,15 @@ func main() {
 
 		res.Body.Close()
 
-		fmt.Printf("Consumed message: %s\n", subRes.Msg)
+		fmt.Printf("Consumed message: %s\n", mustBase64Decode(subRes.Msg))
 	}
+}
+
+func mustBase64Decode(b string) string {
+	s, err := base64.StdEncoding.DecodeString(string(b))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return string(s)
 }
