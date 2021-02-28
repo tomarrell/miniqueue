@@ -41,7 +41,7 @@ published, nothing more.
   - `server → client: { "msg": [base64], "error": "...", dackCount: 1 }`
   - `client → server: "ACK"`
 
-You can also find example usage in the `./examples/` directory.
+You can also find examples in the [`./examples/`](./examples/) directory.
 
 ## Usage
 
@@ -70,7 +70,6 @@ Usage of ./miniqueue:
         period between runs to check and restore delayed messages (default 1s)
   -port int
         port used to run the server (default 8080)
-
 ```
 
 Once running, MiniQueue will expose an HTTP/2 server capable of bidirectional
@@ -115,6 +114,16 @@ To get you started, here are some common ways to get up and running with `miniqu
 ```bash
 λ ./miniqueue -port 8081
 ```
+
+## Examples
+
+To take a look at some common usage, we have compiled some examples for
+reference in the [`./examples/`](./examples/) directory. Here you will find
+common patterns such as:
+
+- [Exponential backoff](./examples/exponential_backoff), `1s → 2s → 4s` etc
+- Failure resistant [workers](./examples/workers)
+- Simple [echo](./examples/echo)
 
 ## Commands
 
@@ -173,7 +182,8 @@ consumed 42982 times in 10s
 4298 (consume+ack)/second
 ```
 
-Running on my MacBook Pro (15-inch, 2019), with a 2.6 GHz 6-Core Intel Core i7.
+Running on my MacBook Pro (15-inch, 2019), with a 2.6 GHz 6-Core Intel Core i7
+using Go `v1.15`.
 
 ## Contributing
 
