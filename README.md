@@ -83,8 +83,8 @@ in some cases to enable certain features. The consumer payload looks like:
 
 ```js
 {
-  "msg": "dGVzdA==", // base64 encoded message
-  "dackCount": 2,    // Integer
+  "msg": "dGVzdA==", // base64 encoded msg
+  "dackCount": 2,    // number of times the msg has been DACK'ed
 }
 ```
 
