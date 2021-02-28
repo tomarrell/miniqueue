@@ -64,7 +64,7 @@ func (c *consumer) Ack() error {
 // consumers.
 func (c *consumer) Nack() error {
 	if err := c.store.Nack(c.topic, c.ackOffset); err != nil {
-		return fmt.Errorf("nacking topic %s with offset %d: %v", c.topic, c.ackOffset, err)
+		return fmt.Errorf("nacking topic %s with offset %d: %w", c.topic, c.ackOffset, err)
 	}
 
 	c.notifier.NotifyConsumer(c.topic, eventTypeNack)

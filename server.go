@@ -176,7 +176,7 @@ func subscribe(broker brokerer) http.HandlerFunc {
 			if err := dec.Decode(&cmd); isDisconnect(err) {
 				log.Warn().Msg("client disconnected")
 
-				if err := cons.Nack(); err != nil {
+				if err := cons.Nack(); !errors.Is(err, errNackMsgNotExist) && err != nil {
 					log.Err(err).Msg("failed to nack")
 				}
 
