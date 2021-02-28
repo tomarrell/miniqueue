@@ -81,7 +81,7 @@ and returned to the front of the queue.
 Messages sent to subscribers are JSON encoded, containing additional information
 in some cases to enable certain features. The consumer payload looks like: 
 
-```json
+```js
 {
   "msg": "dGVzdA==", // base64 encoded message
   "dackCount": 2,    // Integer
@@ -89,7 +89,7 @@ in some cases to enable certain features. The consumer payload looks like:
 ```
 
 In case of an error, the payload will be:
-```json
+```js
 {
   "error": "uh oh, something went wrong"
 }
