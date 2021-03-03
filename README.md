@@ -117,8 +117,34 @@ To get you started, here are some common ways to get up and running with `miniqu
 
 ## Docker 
 
-As of `v0.7.0` there are published miniqueue docker images available
-[here](https://hub.docker.com/repository/docker/tomarrell/miniqueue).
+As of `v0.7.0` there are published miniqueue docker images available in the
+Docker hub repository
+[`tomarrell/miniqueue`](https://hub.docker.com/repository/docker/tomarrell/miniqueue).
+
+It is recommended to use a tagged release build. The tag `latest` tracks the
+`master` branch.
+
+With the TLS certificate and key in a relative directory `./certs` (can be
+generated using [mkcert](https://github.com/FiloSottile/mkcert)).
+
+```bash
+./certs
+├── localhost-key.pem
+└── localhost.pem
+```
+
+You can execute the following Docker command to run the image.
+
+```bash
+$ docker run \
+  -v $(pwd)/certs:/etc/miniqueue/certs \
+  -p 8080:8080 \
+  tomarrell/miniqueue:v0.7.0 \
+  -cert /etc/miniqueue/certs/localhost.pem \
+  -key /etc/miniqueue/certs/localhost-key.pem \
+  -db /var/lib/miniqueue \
+  -human
+```
 
 ## Examples
 
