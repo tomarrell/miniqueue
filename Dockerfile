@@ -9,6 +9,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o miniqueue .
 # Exec image
 FROM alpine:latest
 
-COPY --from=builder /build/miniqueue /app/
+COPY --from=builder /build/miniqueue /miniqueue
 
-ENTRYPOINT ["/app/miniqueue"]
+VOLUME /var/lib/miniqueue
+
+ENTRYPOINT ["/miniqueue"]

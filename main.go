@@ -18,7 +18,7 @@ const (
 	defaultPort          = 8080
 	defaultCertPath      = "./testdata/localhost.pem"
 	defaultKeyPath       = "./testdata/localhost-key.pem"
-	defaultDBPath        = "./miniqueue"
+	defaultDBPath        = "./data"
 	defaultLogLevel      = "debug"
 )
 
