@@ -115,6 +115,11 @@ To get you started, here are some common ways to get up and running with `miniqu
 λ ./miniqueue -port 8081
 ```
 
+## Docker 
+
+As of `v0.7.0` there are published miniqueue docker images available
+[here](https://hub.docker.com/repository/docker/tomarrell/miniqueue).
+
 ## Examples
 
 To take a look at some common usage, we have compiled some examples for
