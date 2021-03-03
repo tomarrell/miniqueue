@@ -16,16 +16,16 @@ published, nothing more.
 
 ## Features
 
-- ✅ Simple to run
-- 🚀 Very fast, see [benchmarks](#benchmarks)
-- 📈 Not infinitely scalable
-- 📜 Multiple topics
-- ✨ HTTP/2
-- ✉️  Publish
-- 📩 Subscribe
-- 🧾 Acknowledgements
-- 🛡️ Persistent
-- 🛠️ Prometheus metrics [WIP]
+- Simple to run
+- Very fast, see [benchmarks](#benchmarks)
+- Not infinitely scalable
+- Multiple topics
+- HTTP/2
+- Publish
+- Subscribe
+- Acknowledgements
+- Persistent
+- Prometheus metrics [WIP]
 
 ## API
 
