@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"strconv"
@@ -293,5 +294,6 @@ func handleConsumerNext(ctx context.Context, log zerolog.Logger, enc *json.Encod
 
 func isDisconnect(err error) bool {
 	return err != nil && (strings.Contains(err.Error(), "client disconnected") ||
-		strings.Contains(err.Error(), "; CANCEL"))
+		strings.Contains(err.Error(), "; CANCEL") ||
+		errors.Is(err, io.EOF))
 }
