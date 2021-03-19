@@ -104,6 +104,15 @@ func (b *broker) Subscribe(topic string) *consumer {
 	return &cons
 }
 
+// Purge removes the topic from the broker.
+func (b *broker) Purge(topic string) error {
+	if err := b.store.Purge(topic); err != nil {
+		return fmt.Errorf("purging topic in store: %v", err)
+	}
+
+	return nil
+}
+
 // Shutdown the broker.
 func (b *broker) Shutdown() error {
 	return b.store.Close()

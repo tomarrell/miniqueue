@@ -32,15 +32,21 @@ type consumer struct {
 // Next will attempt to retrieve the next value on the topic, or it will
 // block waiting for a msg indicating there is a new value available.
 func (c *consumer) Next(ctx context.Context) (val *value, err error) {
-	val, ao, err := c.store.GetNext(c.topic)
-	if errors.Is(err, errTopicEmpty) {
+	var ao int
+
+	// Repeat trying to get the next value while the topic is either empty or not
+	// created yet. It may exist sometime in the future.
+	for {
+		val, ao, err = c.store.GetNext(c.topic)
+		if !errors.Is(err, errTopicEmpty) && !errors.Is(err, errTopicNotExist) {
+			break
+		}
+
 		select {
 		case <-c.eventChan:
 		case <-ctx.Done():
 			return nil, errRequestCancelled
 		}
-
-		return c.Next(ctx)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("getting next from store: %v", err)

@@ -15,7 +15,7 @@ const tmpDBPath = "/tmp/miniqueue_test_db"
 
 // Insert
 func TestInsert_Single(t *testing.T) {
-	s := newStore(t.TempDir())
+	s := newStore(tmpDBPath)
 	t.Cleanup(s.Destroy)
 
 	assert.NoError(t, s.Insert(defaultTopic, newValue([]byte("test_value"))))
@@ -486,7 +486,7 @@ func TestPurge(t *testing.T) {
 	t.Cleanup(s.Destroy)
 
 	msg1 := newValue([]byte("test_value_1"))
-	s.Insert(defaultTopic, msg1)
+	assert.NoError(t, s.Insert(defaultTopic, msg1))
 
 	// Check the value was inserted successfully
 	val, offset, err := s.GetNext(defaultTopic)
@@ -503,7 +503,7 @@ func TestPurge(t *testing.T) {
 
 	// Insert a new value into the topic
 	msg2 := newValue([]byte("test_value_2"))
-	s.Insert(defaultTopic, msg2)
+	assert.NoError(t, s.Insert(defaultTopic, msg2))
 
 	// Check the correct value is read back
 	val, offset, err = s.GetNext(defaultTopic)
@@ -513,17 +513,12 @@ func TestPurge(t *testing.T) {
 }
 
 func BenchmarkPurge(b *testing.B) {
-	const (
-		topic = "test_topic"
-		msg   = "test_value"
-	)
-
 	s := newStore(b.TempDir())
 	b.Cleanup(s.Destroy)
 
 	for n := 0; n < b.N; n++ {
-		s.Insert(defaultTopic, newValue([]byte("hello world")))
-		s.Purge(defaultTopic)
+		assert.NoError(b, s.Insert(defaultTopic, newValue([]byte("hello world"))))
+		assert.NoError(b, s.Purge(defaultTopic))
 	}
 }
 

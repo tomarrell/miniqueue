@@ -55,7 +55,7 @@ func TestSubscribeSingleMessage(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/publish/%s", defaultTopic), strings.NewReader(msg))
 	r = mux.SetURLVars(r, map[string]string{"topic": defaultTopic})
 
-	publish(b)(pubW, r)
+	publishHandler(b)(pubW, r)
 	assert.Equal(http.StatusCreated, pubW.Code)
 
 	// Subscribe to the same topic
@@ -63,7 +63,7 @@ func TestSubscribeSingleMessage(t *testing.T) {
 	r = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/subscribe/%s", defaultTopic), helperMustEncodeString(CmdInit))
 	r = mux.SetURLVars(r, map[string]string{"topic": defaultTopic})
 
-	go subscribe(b)(subW, r)
+	go subscribeHandler(b)(subW, r)
 
 	// Wait for the first message to be written
 	decoder := NewDecodeWaiter(subW)
@@ -90,7 +90,7 @@ func TestSubscribeAck(t *testing.T) {
 	// Publish twice
 	pubW := NewRecorder()
 
-	publish(b)(pubW, r)
+	publishHandler(b)(pubW, r)
 	assert.Equal(http.StatusCreated, pubW.Code)
 
 	// Publish a second time to the topic with a different body
@@ -98,7 +98,7 @@ func TestSubscribeAck(t *testing.T) {
 	r = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/publish/%s", defaultTopic), strings.NewReader(msg2))
 	r = mux.SetURLVars(r, map[string]string{"topic": defaultTopic})
 
-	publish(b)(pubW, r)
+	publishHandler(b)(pubW, r)
 	assert.Equal(http.StatusCreated, pubW.Code)
 
 	// Subscribe to the same topic
@@ -112,7 +112,7 @@ func TestSubscribeAck(t *testing.T) {
 	r = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/subscribe/%s", defaultTopic), reader)
 	r = mux.SetURLVars(r, map[string]string{"topic": defaultTopic})
 
-	go subscribe(b)(subW, r)
+	go subscribeHandler(b)(subW, r)
 
 	// Wait for the first message to be written
 	decoder := NewDecodeWaiter(subW)
@@ -414,6 +414,49 @@ func TestServerMultiConsumerConnectionLost(t *testing.T) {
 		assert.FailNow("timed out waiting for second decode")
 	case <-done:
 	}
+}
+
+func TestServerDelete(t *testing.T) {
+	assert := assert.New(t)
+
+	srv, _, srvCloser := helperNewTestServer(t)
+	t.Cleanup(srvCloser)
+
+	// Publish twice
+	msg1 := "test_msg_1"
+	helperPublishMessage(t, srv, defaultTopic, msg1)
+
+	msg2 := "test_msg_2"
+	helperPublishMessage(t, srv, defaultTopic, msg2)
+
+	// Setup a subscriber
+	encoder, decoder, closeSub := helperSubscribeTopic(t, srv, defaultTopic)
+	defer closeSub()
+
+	var out subResponse
+	assert.NoError(decoder.Decode(&out))
+	assert.Equal(out.Msg, []byte(msg1))
+
+	// Purge the topic
+	req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("%s/%s", srv.URL, defaultTopic), nil)
+	res, err := srv.Client().Do(req)
+	assert.NoError(err)
+	res.Body.Close()
+	assert.Equal(http.StatusOK, res.StatusCode)
+
+	assert.NoError(encoder.Encode("ACK"))
+
+	// Publish again after the purge
+	msg3 := "test_msg_3"
+	helperPublishMessage(t, srv, defaultTopic, msg3)
+
+	// Expect that it consumes the most recently published message
+	out = subResponse{}
+	assert.NoError(decoder.Decode(&out))
+	assert.Equal("", out.Error)
+	assert.Equal([]byte(msg3), out.Msg)
+
+	time.Sleep(time.Second)
 }
 
 // Benchmarking

@@ -51,6 +51,7 @@ const (
 	errBack              = serverError("error BACKing message")
 	errDecodingCmd       = serverError("error decoding command")
 	errRequestCancelled  = serverError("request context cancelled")
+	errPurge             = serverError("failed to purge topic")
 )
 
 type serverError string
@@ -62,6 +63,7 @@ func (e serverError) Error() string {
 type brokerer interface {
 	Publish(topic string, value *value) error
 	Subscribe(topic string) *consumer
+	Purge(topic string) error
 }
 
 type server struct {
@@ -77,13 +79,52 @@ func newServer(broker brokerer) *server {
 func (s server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	route := mux.NewRouter()
 
-	route.HandleFunc("/publish/{topic}", publish(s.broker)).Methods(http.MethodPost)
-	route.HandleFunc("/subscribe/{topic}", subscribe(s.broker)).Methods(http.MethodPost)
+	route.HandleFunc("/{topic}", deleteHandler(s.broker)).Methods(http.MethodDelete)
+	route.HandleFunc("/publish/{topic}", publishHandler(s.broker)).Methods(http.MethodPost)
+	route.HandleFunc("/subscribe/{topic}", subscribeHandler(s.broker)).Methods(http.MethodPost)
 
 	route.ServeHTTP(w, r)
 }
 
-func publish(broker brokerer) http.HandlerFunc {
+func deleteHandler(broker brokerer) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		log := log.With().
+			Str("request_id", xid.New().String()).
+			Str("handler", "delete").
+			Logger()
+
+		// Read topic
+		vars := mux.Vars(r)
+		topic, ok := vars[topicVarKey]
+		if !ok {
+			log.Debug().Msg("invalid topic in path")
+
+			w.WriteHeader(http.StatusBadRequest)
+			respondError(log, json.NewEncoder(w), errInvalidTopicValue.Error())
+
+			return
+		}
+
+		log = log.With().
+			Str("topic", topic).
+			Logger()
+
+		log.Info().Msg("deleting topic")
+
+		if err := broker.Purge(topic); err != nil {
+			log.Err(err).Msg("failed purging topic")
+
+			w.WriteHeader(http.StatusInternalServerError)
+			respondError(log, json.NewEncoder(w), errPurge.Error())
+
+			return
+		}
+
+		log.Info().Msg("topic deleted")
+	}
+}
+
+func publishHandler(broker brokerer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log := log.With().
 			Str("request_id", xid.New().String()).
@@ -138,7 +179,7 @@ func publish(broker brokerer) http.HandlerFunc {
 	}
 }
 
-func subscribe(broker brokerer) http.HandlerFunc {
+func subscribeHandler(broker brokerer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 

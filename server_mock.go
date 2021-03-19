@@ -47,6 +47,20 @@ func (mr *MockbrokererMockRecorder) Publish(topic, value interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*Mockbrokerer)(nil).Publish), topic, value)
 }
 
+// Purge mocks base method.
+func (m *Mockbrokerer) Purge(topic string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Purge", topic)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Purge indicates an expected call of Purge.
+func (mr *MockbrokererMockRecorder) Purge(topic interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Purge", reflect.TypeOf((*Mockbrokerer)(nil).Purge), topic)
+}
+
 // Subscribe mocks base method.
 func (m *Mockbrokerer) Subscribe(topic string) *consumer {
 	m.ctrl.T.Helper()
