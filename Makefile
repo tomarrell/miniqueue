@@ -15,6 +15,10 @@ run: build ## Run miniqueue docker image built from HEAD
 build: ## Build a docker image with the git tag pointing to current HEAD or the current commit hash.
 	docker build . -t tomarrell/miniqueue:$(DOCKER_TAG)
 
+.PHONY: bench
+bench: ## Run Go benchmarks
+	go test -bench=. -run=$$^
+
 
 ## Help display.
 ## Pulls comments from beside commands and prints a nicely formatted

@@ -1,0 +1,9 @@
+go test -bench=. -run=$^
+goos: darwin
+goarch: amd64
+pkg: github.com/tomarrell/miniqueue
+cpu: Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz
+BenchmarkPublish-12    	    6488	    175418 ns/op
+BenchmarkPurge-12      	    2214	    909116 ns/op
+PASS
+ok  	github.com/tomarrell/miniqueue	3.569s
