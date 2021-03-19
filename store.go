@@ -66,6 +66,9 @@ type storer interface {
 	// Close closes the store.
 	Close() error
 
+	// Purge deletes all data associated with a topic.
+	Purge(topic string) error
+
 	// Destroy removes the store from persistence. This is a destructive
 	// operation.
 	Destroy()
@@ -496,6 +499,38 @@ func (s *store) Meta() (*metadata, error) {
 	return &metadata{
 		topics: topics,
 	}, nil
+}
+
+// Purge deletes all data associated with a topic.
+func (s *store) Purge(topic string) error {
+	s.Lock()
+	defer s.Unlock()
+
+	batch := new(leveldb.Batch)
+
+	prefix := util.BytesPrefix([]byte(fmt.Sprintf("t-%s", topic)))
+	iter := s.db.NewIterator(prefix, nil)
+
+	for iter.Next() {
+		key := iter.Key()
+		batch.Delete(key)
+	}
+
+	iter.Release()
+	if err := iter.Error(); err != nil {
+		return fmt.Errorf("iterating over purge prefix: %v", err)
+	}
+
+	if err := s.db.Write(batch, nil); err != nil {
+		return fmt.Errorf("writing purge batch: %v", err)
+	}
+
+	// TODO measure performance impact of immediate compaction
+	// if err := s.db.CompactRange(*prefix); err != nil {
+	// return fmt.Errorf("compacting purged range: %v", err)
+	// }
+
+	return nil
 }
 
 // Close the store.

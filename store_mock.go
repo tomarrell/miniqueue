@@ -9,6 +9,7 @@ import (
 	time "time"
 
 	gomock "github.com/golang/mock/gomock"
+	opt "github.com/syndtr/goleveldb/leveldb/opt"
 	util "github.com/syndtr/goleveldb/leveldb/util"
 )
 
@@ -175,6 +176,20 @@ func (m *Mockstorer) Nack(topic string, ackOffset int) error {
 func (mr *MockstorerMockRecorder) Nack(topic, ackOffset interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Nack", reflect.TypeOf((*Mockstorer)(nil).Nack), topic, ackOffset)
+}
+
+// Purge mocks base method.
+func (m *Mockstorer) Purge(topic string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Purge", topic)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Purge indicates an expected call of Purge.
+func (mr *MockstorerMockRecorder) Purge(topic interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Purge", reflect.TypeOf((*Mockstorer)(nil).Purge), topic)
 }
 
 // ReturnDelayed mocks base method.
@@ -363,4 +378,71 @@ func (m *MockdelayedIterator) Value() []byte {
 func (mr *MockdelayedIteratorMockRecorder) Value() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Value", reflect.TypeOf((*MockdelayedIterator)(nil).Value))
+}
+
+// Mockleveldber is a mock of leveldber interface.
+type Mockleveldber struct {
+	ctrl     *gomock.Controller
+	recorder *MockleveldberMockRecorder
+}
+
+// MockleveldberMockRecorder is the mock recorder for Mockleveldber.
+type MockleveldberMockRecorder struct {
+	mock *Mockleveldber
+}
+
+// NewMockleveldber creates a new mock instance.
+func NewMockleveldber(ctrl *gomock.Controller) *Mockleveldber {
+	mock := &Mockleveldber{ctrl: ctrl}
+	mock.recorder = &MockleveldberMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *Mockleveldber) EXPECT() *MockleveldberMockRecorder {
+	return m.recorder
+}
+
+// Get mocks base method.
+func (m *Mockleveldber) Get(key []byte, ro *opt.ReadOptions) ([]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Get", key, ro)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Get indicates an expected call of Get.
+func (mr *MockleveldberMockRecorder) Get(key, ro interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*Mockleveldber)(nil).Get), key, ro)
+}
+
+// Has mocks base method.
+func (m *Mockleveldber) Has(key []byte, ro *opt.ReadOptions) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Has", key, ro)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Has indicates an expected call of Has.
+func (mr *MockleveldberMockRecorder) Has(key, ro interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Has", reflect.TypeOf((*Mockleveldber)(nil).Has), key, ro)
+}
+
+// Put mocks base method.
+func (m *Mockleveldber) Put(key, value []byte, wo *opt.WriteOptions) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Put", key, value, wo)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Put indicates an expected call of Put.
+func (mr *MockleveldberMockRecorder) Put(key, value, wo interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Put", reflect.TypeOf((*Mockleveldber)(nil).Put), key, value, wo)
 }
