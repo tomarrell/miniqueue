@@ -41,6 +41,9 @@ published, nothing more.
   - `server → client: { "msg": [base64], "error": "...", dackCount: 1 }`
   - `client → server: "ACK"`
 
+- DELETE `/:topic` - deletes the given topic, removing all messages. Note, this
+    is an expensive operation for large topics.
+
 You can also find examples in the [`./examples/`](./examples/) directory.
 
 ## Usage
