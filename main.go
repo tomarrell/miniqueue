@@ -69,6 +69,14 @@ func main() {
 
 	b := newBroker(newStore(*dbPath))
 	go b.ProcessDelays(ctx, *delayPeriod)
+
+	switch {
+	case true:
+		runHTTP(b, port, tlsCertPath, tlsKeyPath)
+	}
+}
+
+func runHTTP(b brokerer, port *int, tlsCertPath, tlsKeyPath *string) {
 	srv := newServer(b)
 
 	// Start the server
