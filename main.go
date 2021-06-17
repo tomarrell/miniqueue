@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"flag"
 	"fmt"
@@ -11,6 +12,12 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/tidwall/redcon"
+)
+
+var (
+	//go:embed VERSION
+	version string
 )
 
 const (
@@ -71,20 +78,35 @@ func main() {
 	go b.ProcessDelays(ctx, *delayPeriod)
 
 	switch {
-	case true:
+	case false:
 		runHTTP(b, port, tlsCertPath, tlsKeyPath)
+
+	case true:
+		runRedis(b, tlsCertPath, tlsKeyPath)
+	}
+}
+
+func runRedis(b brokerer, tlsCertPath, tlsKeyPath *string) {
+	log.Info().
+		Msg("starting miniqueue over redis")
+
+	r := newRedis(b)
+
+	err := redcon.ListenAndServe(":6379", r.handleCmd, nil, nil)
+	if err != nil {
+		log.Err(err).Msg("closing server")
 	}
 }
 
 func runHTTP(b brokerer, port *int, tlsCertPath, tlsKeyPath *string) {
-	srv := newServer(b)
-
 	// Start the server
 	p := fmt.Sprintf(":%d", *port)
 
 	log.Info().
 		Str("port", p).
-		Msg("starting miniqueue")
+		Msg("starting miniqueue over HTTP")
+
+	srv := newHTTPServer(b)
 
 	if err := http.ListenAndServeTLS(p, *tlsCertPath, *tlsKeyPath, srv); !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal().

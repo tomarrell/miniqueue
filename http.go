@@ -66,17 +66,17 @@ type brokerer interface {
 	Purge(topic string) error
 }
 
-type server struct {
+type httpServer struct {
 	broker brokerer
 }
 
-func newServer(broker brokerer) *server {
-	return &server{
+func newHTTPServer(broker brokerer) *httpServer {
+	return &httpServer{
 		broker: broker,
 	}
 }
 
-func (s server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (s httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	route := mux.NewRouter()
 
 	route.HandleFunc("/{topic}", deleteHandler(s.broker)).Methods(http.MethodDelete)
