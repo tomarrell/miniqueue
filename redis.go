@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tidwall/redcon"
@@ -34,10 +35,40 @@ func (r *redis) handleCmd(conn redcon.Conn, rcmd redcon.Command) {
 	case "ping":
 		conn.WriteString("pong")
 
-	case "pub":
+	case "topics":
+		topics, err := r.broker.Topics()
+		if err != nil {
+			log.Err(err).Msg("failed to get topics")
+			conn.WriteError("failed to get topics")
+			return
+		}
+
+		conn.WriteString(fmt.Sprintf("%v", topics))
+
+	case "publish":
 		handleRedisPublish(r.broker)(conn, rcmd)
 
-	case "":
+	case "subscribe":
+		handleRedisSubscribe(r.broker)(conn, rcmd)
+	}
+}
+
+func handleRedisTopics(broker brokerer) redcon.HandlerFunc {
+	return func(conn redcon.Conn, rcmd redcon.Command) {
+	}
+}
+
+func handleRedisSubscribe(broker brokerer) redcon.HandlerFunc {
+	return func(conn redcon.Conn, rcmd redcon.Command) {
+		dconn := conn.Detach()
+		n := 0
+
+		for {
+			<-time.After(time.Second)
+			n += 1
+			dconn.WriteString(fmt.Sprintf("Hello, %d", n))
+			dconn.Flush()
+		}
 	}
 }
 

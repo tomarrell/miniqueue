@@ -35,7 +35,7 @@ func TestPublishSingleMessage(t *testing.T) {
 	rec := NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/publish/%s", defaultTopic), bytes.NewReader(msg.Raw))
 
-	srv := newServer(mockBroker)
+	srv := newHTTPServer(mockBroker)
 	srv.ServeHTTP(rec, req)
 
 	assert.Equal(http.StatusCreated, rec.Code)
@@ -472,7 +472,7 @@ func BenchmarkPublish(b *testing.B) {
 	db, err := leveldb.Open(storage.NewMemStorage(), nil)
 	assert.NoError(b, err)
 
-	srv := httptest.NewUnstartedServer(newServer(newBroker(&store{db: db})))
+	srv := httptest.NewUnstartedServer(newHTTPServer(newBroker(&store{db: db})))
 	srv.EnableHTTP2 = true
 	srv.StartTLS()
 
@@ -506,7 +506,7 @@ func helperNewTestServer(t *testing.T) (*httptest.Server, hooks, func()) {
 	assert.NoError(t, err)
 
 	b := newBroker(&store{path: "", db: db})
-	srv := httptest.NewUnstartedServer(newServer(b))
+	srv := httptest.NewUnstartedServer(newHTTPServer(b))
 
 	srv.EnableHTTP2 = true
 	srv.StartTLS()

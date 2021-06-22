@@ -1,4 +1,3 @@
-//go:generate mockgen -source=$GOFILE -destination=server_mock.go -package=main
 package main
 
 import (
@@ -58,12 +57,6 @@ type serverError string
 
 func (e serverError) Error() string {
 	return string(e)
-}
-
-type brokerer interface {
-	Publish(topic string, value *value) error
-	Subscribe(topic string) *consumer
-	Purge(topic string) error
 }
 
 type httpServer struct {

@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/rs/zerolog/log"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
@@ -796,17 +797,23 @@ func addTopicMeta(db leveldber, topic string) error {
 		}
 
 		var existingTopics []string
-		if err := json.Unmarshal(val, &topics); err != nil {
+		if err := json.Unmarshal(val, &existingTopics); err != nil {
 			return fmt.Errorf("unmarshalling topics meta: %v", err)
 		}
 
+		spew.Dump("1", existingTopics)
+
 		topics = append(existingTopics, topic)
 	}
+
+	spew.Dump("2", topics)
 
 	val, err := json.Marshal(topics)
 	if err != nil {
 		return fmt.Errorf("marshalling topics meta: %v", err)
 	}
+
+	spew.Dump("3", val)
 
 	if err := db.Put(key, val, nil); err != nil {
 		return fmt.Errorf("putting topics meta %s: %v", key, err)
