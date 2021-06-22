@@ -796,7 +796,7 @@ func addTopicMeta(db leveldber, topic string) error {
 		}
 
 		var existingTopics []string
-		if err := json.Unmarshal(val, &topics); err != nil {
+		if err := json.Unmarshal(val, &existingTopics); err != nil {
 			return fmt.Errorf("unmarshalling topics meta: %v", err)
 		}
 
