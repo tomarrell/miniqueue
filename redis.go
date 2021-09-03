@@ -1,9 +1,9 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tidwall/redcon"
@@ -36,14 +36,7 @@ func (r *redis) handleCmd(conn redcon.Conn, rcmd redcon.Command) {
 		conn.WriteString("pong")
 
 	case "topics":
-		topics, err := r.broker.Topics()
-		if err != nil {
-			log.Err(err).Msg("failed to get topics")
-			conn.WriteError("failed to get topics")
-			return
-		}
-
-		conn.WriteString(fmt.Sprintf("%v", topics))
+		handleRedisTopics(r.broker)(conn, rcmd)
 
 	case "publish":
 		handleRedisPublish(r.broker)(conn, rcmd)
@@ -55,18 +48,43 @@ func (r *redis) handleCmd(conn redcon.Conn, rcmd redcon.Command) {
 
 func handleRedisTopics(broker brokerer) redcon.HandlerFunc {
 	return func(conn redcon.Conn, rcmd redcon.Command) {
+		topics, err := broker.Topics()
+		if err != nil {
+			log.Err(err).Msg("failed to get topics")
+			conn.WriteError("failed to get topics")
+			return
+		}
+
+		conn.WriteString(fmt.Sprintf("%v", topics))
 	}
 }
 
 func handleRedisSubscribe(broker brokerer) redcon.HandlerFunc {
 	return func(conn redcon.Conn, rcmd redcon.Command) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 		dconn := conn.Detach()
-		n := 0
+		dconn.SetContext(ctx)
+
+		if len(rcmd.Args) != 2 {
+			dconn.WriteError("invalid number of args, want: 2")
+			dconn.Flush()
+			return
+		}
+
+		topic := string(rcmd.Args[1])
+		c := broker.Subscribe(topic)
 
 		for {
-			<-time.After(time.Second)
-			n += 1
-			dconn.WriteString(fmt.Sprintf("Hello, %d", n))
+			val, err := c.Next(ctx)
+			if err != nil {
+				log.Err(err).Msg("getting next value")
+				dconn.WriteError("failed to get next value")
+				dconn.Flush()
+				return
+			}
+
+			dconn.WriteAny(val.Raw)
 			dconn.Flush()
 		}
 	}
