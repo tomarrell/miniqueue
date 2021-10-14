@@ -1,4 +1,3 @@
-//go:generate mockgen -source=$GOFILE -destination=server_mock.go -package=main
 package main
 
 import (
@@ -60,23 +59,17 @@ func (e serverError) Error() string {
 	return string(e)
 }
 
-type brokerer interface {
-	Publish(topic string, value *value) error
-	Subscribe(topic string) *consumer
-	Purge(topic string) error
-}
-
-type server struct {
+type httpServer struct {
 	broker brokerer
 }
 
-func newServer(broker brokerer) *server {
-	return &server{
+func newHTTPServer(broker brokerer) *httpServer {
+	return &httpServer{
 		broker: broker,
 	}
 }
 
-func (s server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (s httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	route := mux.NewRouter()
 
 	route.HandleFunc("/{topic}", deleteHandler(s.broker)).Methods(http.MethodDelete)

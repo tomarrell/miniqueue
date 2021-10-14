@@ -10,24 +10,31 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+//go:generate mockgen -source=$GOFILE -destination=broker_mock.go -package=main
+type brokerer interface {
+	Publish(topic string, value *value) error
+	Subscribe(topic string) *consumer
+	Purge(topic string) error
+	Topics() ([]string, error)
+}
+
 type broker struct {
-	meta      *metadata
 	store     storer
 	consumers map[string][]consumer
 	sync.RWMutex
 }
 
 func newBroker(store storer) *broker {
-	meta, err := store.Meta()
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to initialise broker")
-	}
-
 	return &broker{
-		meta:      meta,
 		store:     store,
 		consumers: map[string][]consumer{},
 	}
+}
+
+func (b *broker) Topics() ([]string, error) {
+	meta, err := b.store.Meta()
+
+	return meta.topics, err
 }
 
 // ProcessDelays is a blocking function which starts a loop to check and return
@@ -37,25 +44,13 @@ func (b *broker) ProcessDelays(ctx context.Context, period time.Duration) {
 	log.Debug().Msg("starting delay queue processing")
 
 	for {
-		now := time.Now()
+		meta, err := b.store.Meta()
+		if err != nil {
+			continue
+		}
 
-		b.RLock()
-		topics := b.meta.topics
-		b.RUnlock()
-		for _, t := range topics {
-			count, err := b.store.ReturnDelayed(t, now)
-			if err != nil {
-				log.Err(err).Msg("returning delayed messages to main queue")
-			}
-
-			log.Debug().
-				Str("topic", t).
-				Int("count", count).
-				Msg("returning delayed messages")
-
-			if count >= 1 {
-				b.NotifyConsumer(t, eventTypeMsgReturned)
-			}
+		if err := processTopics(b, meta.topics); err != nil {
+			log.Err(err).Msg("failed to process topics")
 		}
 
 		select {
@@ -67,19 +62,34 @@ func (b *broker) ProcessDelays(ctx context.Context, period time.Duration) {
 	}
 }
 
+func processTopics(b *broker, topics []string) error {
+	now := time.Now()
+
+	for _, t := range topics {
+		count, err := b.store.ReturnDelayed(t, now)
+		if err != nil {
+			log.Err(err).Msg("returning delayed messages to main queue")
+			continue
+		}
+
+		// log.Debug().
+		// Str("topic", t).
+		// Int("count", count).
+		// Msg("returning delayed messages")
+
+		if count >= 1 {
+			b.NotifyConsumer(t, eventTypeMsgReturned)
+		}
+	}
+
+	return nil
+}
+
 // Publish a message to a topic.
 func (b *broker) Publish(topic string, val *value) error {
 	if err := b.store.Insert(topic, val); err != nil {
 		return err
 	}
-
-	b.Lock()
-	meta, err := b.store.Meta()
-	if err != nil {
-		return fmt.Errorf("updating topic metadata: %v", err)
-	}
-	b.meta = meta
-	b.Unlock()
 
 	b.NotifyConsumer(topic, eventTypePublish)
 

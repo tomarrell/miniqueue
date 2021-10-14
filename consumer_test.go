@@ -20,7 +20,6 @@ func TestConsumerNext(t *testing.T) {
 	)
 
 	mockStore := NewMockstorer(ctrl)
-	mockStore.EXPECT().Meta().Return(&metadata{}, nil)
 	mockStore.EXPECT().GetNext(topic).Return(msg1, 0, nil)
 	mockStore.EXPECT().GetNext(topic).Return(msg2, 1, nil)
 
