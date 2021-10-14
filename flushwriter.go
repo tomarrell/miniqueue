@@ -19,10 +19,10 @@ func newFlushWriter(w io.Writer) flushWriter {
 	return fw
 }
 
-func (fw flushWriter) Write(p []byte) (n int, err error) {
-	n, err = fw.w.Write(p)
-	if fw.f != nil {
-		fw.f.Flush()
+func (f flushWriter) Write(p []byte) (n int, err error) {
+	n, err = f.w.Write(p)
+	if f.f != nil {
+		f.f.Flush()
 	}
 
 	return

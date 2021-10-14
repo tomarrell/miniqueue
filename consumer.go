@@ -19,19 +19,27 @@ type notifier interface {
 	NotifyConsumer(topic string, ev eventType)
 }
 
-// consumer handles providing values iteratively to a single consumer.
+// consumer handles providing values iteratively to a single consumer. Methods
+// on a consumer are not thread safe as operations should occur serially.
 type consumer struct {
-	id        string
-	topic     string
-	ackOffset int
-	store     storer
-	eventChan chan eventType
-	notifier  notifier
+	id          string
+	topic       string
+	ackOffset   int
+	store       storer
+	eventChan   chan eventType
+	notifier    notifier
+	outstanding bool // indicates whether the consumer has an outstanding message to ack
 }
 
 // Next will attempt to retrieve the next value on the topic, or it will
 // block waiting for a msg indicating there is a new value available.
 func (c *consumer) Next(ctx context.Context) (val *value, err error) {
+	// Prevent Next from being called if the consumer already has one outstanding
+	// unacknowledged message.
+	if c.outstanding {
+		return nil, errors.New("unacknowledged message outstanding")
+	}
+
 	var ao int
 
 	// Repeat trying to get the next value while the topic is either empty or not
@@ -53,6 +61,7 @@ func (c *consumer) Next(ctx context.Context) (val *value, err error) {
 	}
 
 	c.ackOffset = ao
+	c.outstanding = true
 
 	return val, err
 }
@@ -62,6 +71,8 @@ func (c *consumer) Ack() error {
 	if err := c.store.Ack(c.topic, c.ackOffset); err != nil {
 		return fmt.Errorf("acking topic %s with offset %d: %v", c.topic, c.ackOffset, err)
 	}
+
+	c.outstanding = false
 
 	return nil
 }
@@ -73,6 +84,7 @@ func (c *consumer) Nack() error {
 		return fmt.Errorf("nacking topic %s with offset %d: %w", c.topic, c.ackOffset, err)
 	}
 
+	c.outstanding = false
 	c.notifier.NotifyConsumer(c.topic, eventTypeNack)
 
 	return nil
@@ -85,6 +97,7 @@ func (c *consumer) Back() error {
 		return fmt.Errorf("backing topic %s with offset %d: %v", c.topic, c.ackOffset, err)
 	}
 
+	c.outstanding = false
 	c.notifier.NotifyConsumer(c.topic, eventTypeBack)
 
 	return nil
@@ -94,6 +107,8 @@ func (c *consumer) Dack(delaySeconds int) error {
 	if err := c.store.Dack(c.topic, c.ackOffset, delaySeconds); err != nil {
 		return fmt.Errorf("dacking topic %s with offset %d and delay %ds: %v", c.topic, c.ackOffset, delaySeconds, err)
 	}
+
+	c.outstanding = false
 
 	return nil
 }
