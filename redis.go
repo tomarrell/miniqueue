@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/rs/xid"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/tidwall/redcon"
 )
@@ -61,14 +63,23 @@ func handleRedisTopics(broker brokerer) redcon.HandlerFunc {
 
 func handleRedisSubscribe(broker brokerer) redcon.HandlerFunc {
 	return func(conn redcon.Conn, rcmd redcon.Command) {
+		log := log.With().Str("id", xid.New().String()).Logger()
+
+		log.Debug().Msg("new connection")
+
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
+
 		dconn := conn.Detach()
 		dconn.SetContext(ctx)
+		defer func() {
+			log.Debug().Msg("closing connection")
+			dconn.Close()
+		}()
 
 		if len(rcmd.Args) != 2 {
 			dconn.WriteError("invalid number of args, want: 2")
-			dconn.Flush()
+			flush(log, dconn)
 			return
 		}
 
@@ -80,12 +91,19 @@ func handleRedisSubscribe(broker brokerer) redcon.HandlerFunc {
 			if err != nil {
 				log.Err(err).Msg("getting next value")
 				dconn.WriteError("failed to get next value")
-				dconn.Flush()
+				flush(log, dconn)
 				return
 			}
 
+			log.Debug().Str("msg", string(val.Raw)).Msg("sending msg")
+
 			dconn.WriteAny(val.Raw)
-			dconn.Flush()
+			if err := flush(log, dconn); err != nil {
+				dconn.WriteError("failed to flush msg")
+				return
+			}
+
+			// TODO Wait for the acknowledgement
 		}
 	}
 }
@@ -110,4 +128,14 @@ func handleRedisPublish(broker brokerer) redcon.HandlerFunc {
 
 		conn.WriteString(respOK)
 	}
+}
+
+// Flush flushes pending messages to the client, handling any errors.
+func flush(log zerolog.Logger, dconn redcon.DetachedConn) error {
+	if err := dconn.Flush(); err != nil {
+		log.Err(err).Msg("flushing msg")
+		return err
+	}
+
+	return nil
 }

@@ -72,10 +72,10 @@ func processTopics(b *broker, topics []string) error {
 			continue
 		}
 
-		log.Debug().
-			Str("topic", t).
-			Int("count", count).
-			Msg("returning delayed messages")
+		// log.Debug().
+		// Str("topic", t).
+		// Int("count", count).
+		// Msg("returning delayed messages")
 
 		if count >= 1 {
 			b.NotifyConsumer(t, eventTypeMsgReturned)
