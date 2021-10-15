@@ -14,6 +14,7 @@ import (
 type brokerer interface {
 	Publish(topic string, value *value) error
 	Subscribe(topic string) *consumer
+	Unsubscribe(topic, id string) error
 	Purge(topic string) error
 	Topics() ([]string, error)
 }
@@ -72,12 +73,12 @@ func processTopics(b *broker, topics []string) error {
 			continue
 		}
 
-		// log.Debug().
-		// Str("topic", t).
-		// Int("count", count).
-		// Msg("returning delayed messages")
-
 		if count >= 1 {
+			log.Debug().
+				Str("topic", t).
+				Int("count", count).
+				Msg("returning delayed messages")
+
 			b.NotifyConsumer(t, eventTypeMsgReturned)
 		}
 	}
@@ -114,6 +115,22 @@ func (b *broker) Subscribe(topic string) *consumer {
 	return &cons
 }
 
+// Unsubscribe removes the consumer from the available pool for the topic.
+func (b *broker) Unsubscribe(topic, id string) error {
+	b.Lock()
+	defer b.Unlock()
+
+	consumers := b.consumers[topic]
+	for i, v := range consumers {
+		if v.id == id {
+			b.consumers[topic] = append(consumers[:i], consumers[i+1:]...)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("consumer ID %s not found for topic %s", id, topic)
+}
+
 // Purge removes the topic from the broker.
 func (b *broker) Purge(topic string) error {
 	if err := b.store.Purge(topic); err != nil {
@@ -138,7 +155,9 @@ func (b *broker) NotifyConsumer(topic string, ev eventType) {
 		select {
 		case c.eventChan <- ev:
 			return
-		default: // If there is noone listening noop
+		default:
+			// TODO if it fails to send to the consumer, find another consumer to send
+			// the message to and possibly remove this consumer from the pool.
 		}
 	}
 }

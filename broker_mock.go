@@ -89,3 +89,17 @@ func (mr *MockbrokererMockRecorder) Topics() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Topics", reflect.TypeOf((*Mockbrokerer)(nil).Topics))
 }
+
+// Unsubscribe mocks base method.
+func (m *Mockbrokerer) Unsubscribe(topic, id string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Unsubscribe", topic, id)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Unsubscribe indicates an expected call of Unsubscribe.
+func (mr *MockbrokererMockRecorder) Unsubscribe(topic, id interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unsubscribe", reflect.TypeOf((*Mockbrokerer)(nil).Unsubscribe), topic, id)
+}

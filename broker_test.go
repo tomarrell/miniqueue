@@ -4,10 +4,10 @@ import (
 	"testing"
 
 	gomock "github.com/golang/mock/gomock"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestBrokerPublish(t *testing.T) {
+func TestBroker_Publish(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -21,10 +21,10 @@ func TestBrokerPublish(t *testing.T) {
 
 	b := newBroker(mockStore)
 
-	assert.NoError(t, b.Publish(topic, value))
+	require.NoError(t, b.Publish(topic, value))
 }
 
-func TestBrokerSubscribe(t *testing.T) {
+func TestBroker_Subscribe(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -37,5 +37,31 @@ func TestBrokerSubscribe(t *testing.T) {
 	b := newBroker(mockStore)
 	c := b.Subscribe(topic)
 
-	assert.IsType(t, &consumer{}, c)
+	require.IsType(t, &consumer{}, c)
+}
+
+func TestBroker_Unsubscribe(t *testing.T) {
+	t.Run("removes consumer from the topic", func(t *testing.T) {
+		b := broker{
+			consumers: map[string][]consumer{},
+		}
+
+		topic := "test_topic"
+
+		c := b.Subscribe(topic)
+		err := b.Unsubscribe(topic, c.id)
+		require.NoError(t, err)
+		require.Len(t, b.consumers[topic], 0)
+	})
+
+	t.Run("returns an error if the consumer doesn't exist", func(t *testing.T) {
+		b := broker{
+			consumers: map[string][]consumer{},
+		}
+
+		topic := "test_topic"
+
+		err := b.Unsubscribe(topic, "test_id")
+		require.Error(t, err)
+	})
 }
