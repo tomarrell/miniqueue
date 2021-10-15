@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"testing"
 
 	gomock "github.com/golang/mock/gomock"
@@ -43,7 +44,7 @@ func TestBroker_Subscribe(t *testing.T) {
 func TestBroker_Unsubscribe(t *testing.T) {
 	t.Run("removes consumer from the topic", func(t *testing.T) {
 		b := broker{
-			consumers: map[string][]consumer{},
+			consumers: map[string][]*consumer{},
 		}
 
 		topic := "test_topic"
@@ -56,12 +57,34 @@ func TestBroker_Unsubscribe(t *testing.T) {
 
 	t.Run("returns an error if the consumer doesn't exist", func(t *testing.T) {
 		b := broker{
-			consumers: map[string][]consumer{},
+			consumers: map[string][]*consumer{},
 		}
 
 		topic := "test_topic"
 
 		err := b.Unsubscribe(topic, "test_id")
 		require.Error(t, err)
+	})
+
+	t.Run("nacks outstanding messages on consumer", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+
+		topic := "test_topic"
+
+		mockStorer := NewMockstorer(ctrl)
+		mockStorer.EXPECT().GetNext(topic).Return(nil, 0, nil)
+		mockStorer.EXPECT().Nack(topic, 0).Return(nil)
+
+		b := broker{
+			consumers: map[string][]*consumer{},
+			store:     mockStorer,
+		}
+
+		c := b.Subscribe(topic)
+		_, err := c.Next(context.Background())
+		require.NoError(t, err)
+
+		err = b.Unsubscribe(topic, c.id)
+		require.NoError(t, err)
 	})
 }

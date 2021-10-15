@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/tidwall/redcon"
@@ -63,9 +62,13 @@ func handleRedisTopics(broker brokerer) redcon.HandlerFunc {
 
 func handleRedisSubscribe(broker brokerer) redcon.HandlerFunc {
 	return func(conn redcon.Conn, rcmd redcon.Command) {
-		log := log.With().Str("id", xid.New().String()).Logger()
+		topic := string(rcmd.Args[1])
+		c := broker.Subscribe(topic)
+		defer broker.Unsubscribe(topic, c.id)
 
-		log.Debug().Msg("new connection")
+		log := log.With().Str("id", c.id).Logger()
+
+		log.Debug().Str("topic", topic).Msg("new connection")
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -74,24 +77,20 @@ func handleRedisSubscribe(broker brokerer) redcon.HandlerFunc {
 		dconn.SetContext(ctx)
 		defer func() {
 			log.Debug().Msg("closing connection")
+			flush(log, dconn)
 			dconn.Close()
 		}()
 
 		if len(rcmd.Args) != 2 {
 			dconn.WriteError("invalid number of args, want: 2")
-			flush(log, dconn)
 			return
 		}
-
-		topic := string(rcmd.Args[1])
-		c := broker.Subscribe(topic)
 
 		for {
 			val, err := c.Next(ctx)
 			if err != nil {
 				log.Err(err).Msg("getting next value")
 				dconn.WriteError("failed to get next value")
-				flush(log, dconn)
 				return
 			}
 
@@ -103,7 +102,36 @@ func handleRedisSubscribe(broker brokerer) redcon.HandlerFunc {
 				return
 			}
 
-			// TODO Wait for the acknowledgement
+			log.Debug().Msg("awaiting ack")
+
+			cmd, err := dconn.ReadCommand()
+			if err != nil {
+				log.Err(err).Msg("reading ack")
+				dconn.WriteError("failed to get next value")
+				return
+			}
+
+			if len(cmd.Args) != 1 {
+				log.Error().Str("cmd", string(cmd.Raw)).Int("len", len(cmd.Args)).Msg("invalid ack cmd length")
+				dconn.WriteError("invalid ack command")
+				return
+			}
+
+			ackCmd := string(cmd.Args[0])
+
+			log.Debug().Str("cmd", ackCmd).Msg("received ack cmd")
+
+			switch strings.ToUpper(ackCmd) {
+			case "ACK":
+				if err := c.Ack(); err != nil {
+					log.Err(err).Msg("acking")
+					dconn.WriteError("failed to ack")
+					return
+				}
+			default:
+				log.Error().Str("cmd", ackCmd).Msg("invalid ack command")
+				return
+			}
 		}
 	}
 }
@@ -126,6 +154,11 @@ func handleRedisPublish(broker brokerer) redcon.HandlerFunc {
 			return
 		}
 
+		log.Debug().
+			Str("topic", topic).
+			Str("msg", string(value.Raw)).
+			Msg("published msg")
+
 		conn.WriteString(respOK)
 	}
 }
@@ -134,6 +167,7 @@ func handleRedisPublish(broker brokerer) redcon.HandlerFunc {
 func flush(log zerolog.Logger, dconn redcon.DetachedConn) error {
 	if err := dconn.Flush(); err != nil {
 		log.Err(err).Msg("flushing msg")
+
 		return err
 	}
 

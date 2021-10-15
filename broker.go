@@ -21,14 +21,14 @@ type brokerer interface {
 
 type broker struct {
 	store     storer
-	consumers map[string][]consumer
+	consumers map[string][]*consumer
 	sync.RWMutex
 }
 
 func newBroker(store storer) *broker {
 	return &broker{
 		store:     store,
-		consumers: map[string][]consumer{},
+		consumers: map[string][]*consumer{},
 	}
 }
 
@@ -99,31 +99,39 @@ func (b *broker) Publish(topic string, val *value) error {
 
 // Subscribe to a topic and return a consumer for the topic.
 func (b *broker) Subscribe(topic string) *consumer {
-	b.Lock()
-	defer b.Unlock()
-
-	cons := consumer{
-		id:        xid.New().String(),
-		topic:     topic,
-		store:     b.store,
-		eventChan: make(chan eventType),
-		notifier:  b,
+	cons := &consumer{
+		id:          xid.New().String(),
+		topic:       topic,
+		ackOffset:   0,
+		store:       b.store,
+		eventChan:   make(chan eventType),
+		notifier:    b,
+		outstanding: false,
 	}
 
+	b.Lock()
 	b.consumers[topic] = append(b.consumers[topic], cons)
+	b.Unlock()
 
-	return &cons
+	return cons
 }
 
-// Unsubscribe removes the consumer from the available pool for the topic.
+// Unsubscribe removes the consumer from the available pool for the topic and
+// returns any messages with outstanding acknowledgements to the queue.
 func (b *broker) Unsubscribe(topic, id string) error {
-	b.Lock()
-	defer b.Unlock()
-
 	consumers := b.consumers[topic]
-	for i, v := range consumers {
-		if v.id == id {
+	for i, c := range consumers {
+		if c.id == id {
+			if c.outstanding {
+				log.Debug().Str("id", c.id).Msg("nacking outstanding message")
+				_ = c.Nack()
+			}
+
+			log.Debug().Str("id", c.id).Msg("unsubscribing consumer")
+
+			b.Lock()
 			b.consumers[topic] = append(consumers[:i], consumers[i+1:]...)
+			b.Unlock()
 			return nil
 		}
 	}
