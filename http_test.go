@@ -377,7 +377,7 @@ func TestServerMultiConsumer(t *testing.T) {
 func TestServerMultiConsumerConnectionLost(t *testing.T) {
 	assert := assert.New(t)
 
-	srv, _, srvCloser := helperNewTestServer(t)
+	srv, hooks, srvCloser := helperNewTestServer(t)
 	defer srvCloser()
 
 	// Publish once
@@ -413,6 +413,8 @@ func TestServerMultiConsumerConnectionLost(t *testing.T) {
 	case <-time.After(time.Second):
 		assert.FailNow("timed out waiting for second decode")
 	case <-done:
+		consumers := hooks.b.consumers[defaultTopic]
+		assert.Len(consumers, 1)
 	}
 }
 

@@ -212,7 +212,11 @@ func subscribeHandler(broker brokerer) http.HandlerFunc {
 				log.Warn().Msg("client disconnected")
 
 				if err := cons.Nack(); !errors.Is(err, errNackMsgNotExist) && err != nil {
-					log.Err(err).Msg("failed to nack")
+					log.Err(err).Msg("nacking on disconnect")
+				}
+
+				if err := broker.Unsubscribe(cons.topic, cons.id); err != nil {
+					log.Err(err).Msg("unsubscribing consumer")
 				}
 
 				return

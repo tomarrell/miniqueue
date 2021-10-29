@@ -73,6 +73,8 @@ func handleRedisSubscribe(broker brokerer) redcon.HandlerFunc {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
+		// Detach the connection from the client so that we can control its
+		// lifecycle independently.
 		dconn := conn.Detach()
 		dconn.SetContext(ctx)
 		defer func() {
