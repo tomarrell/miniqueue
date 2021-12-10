@@ -114,8 +114,8 @@ func handleRedisSubscribe(broker brokerer) redcon.HandlerFunc {
 			}
 
 			if len(cmd.Args) != 1 {
-				log.Error().Str("cmd", string(cmd.Raw)).Int("len", len(cmd.Args)).Msg("invalid ack cmd length")
-				dconn.WriteError("invalid ack command")
+				log.Error().Str("cmd", string(cmd.Raw)).Int("len", len(cmd.Args)).Msg("invalid cmd length")
+				dconn.WriteError("invalid command")
 				return
 			}
 
@@ -124,14 +124,34 @@ func handleRedisSubscribe(broker brokerer) redcon.HandlerFunc {
 			log.Debug().Str("cmd", ackCmd).Msg("received ack cmd")
 
 			switch strings.ToUpper(ackCmd) {
-			case "ACK":
+			case CmdAck:
 				if err := c.Ack(); err != nil {
 					log.Err(err).Msg("acking")
 					dconn.WriteError("failed to ack")
 					return
 				}
+			case CmdBack:
+				if err := c.Back(); err != nil {
+					log.Err(err).Msg("backing")
+					dconn.WriteError("failed to back")
+					return
+				}
+			case CmdNack:
+				if err := c.Nack(); err != nil {
+					log.Err(err).Msg("Nacking")
+					dconn.WriteError("failed to nack")
+					return
+				}
+			case CmdDack:
+				// TODO read extra arg
+				if err := c.Dack(1); err != nil {
+					log.Err(err).Msg("Nacking")
+					dconn.WriteError("failed to nack")
+					return
+				}
 			default:
 				log.Error().Str("cmd", ackCmd).Msg("invalid ack command")
+				dconn.WriteError("invalid ack command")
 				return
 			}
 		}
