@@ -130,6 +130,8 @@ func handleRedisSubscribe(broker brokerer) redcon.HandlerFunc {
 					dconn.WriteError("failed to ack")
 					return
 				}
+				dconn.WriteString(respOK)
+				flush(log, dconn)
 			default:
 				log.Error().Str("cmd", ackCmd).Msg("invalid ack command")
 				return
