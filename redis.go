@@ -2,10 +2,11 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"strings"
 
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/tidwall/redcon"
 )
@@ -75,7 +76,7 @@ func handleRedisSubscribe(broker brokerer) redcon.HandlerFunc {
 
 		// Detach the connection from the client so that we can control its
 		// lifecycle independently.
-		dconn := flushable{log: log, DetachedConn: conn.Detach()}
+		dconn := flushable{DetachedConn: conn.Detach()}
 		dconn.SetContext(ctx)
 		defer func() {
 			log.Debug().Msg("closing connection")
@@ -89,6 +90,13 @@ func handleRedisSubscribe(broker brokerer) redcon.HandlerFunc {
 		}
 
 		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			// Wait for a new value
 			val, err := c.Next(ctx)
 			if err != nil {
 				log.Err(err).Msg("getting next value")
@@ -100,14 +108,16 @@ func handleRedisSubscribe(broker brokerer) redcon.HandlerFunc {
 
 			dconn.WriteAny(val.Raw)
 			if err := dconn.flush(); err != nil {
-				dconn.WriteError("failed to flush msg")
+				log.Err(err).Msg("flushing msg")
 				return
 			}
 
 			log.Debug().Msg("awaiting ack")
 
 			cmd, err := dconn.ReadCommand()
-			if err != nil {
+			if errors.Is(err, io.EOF) {
+				return
+			} else if err != nil {
 				log.Err(err).Msg("reading ack")
 				dconn.WriteError("failed to get next value")
 				return
@@ -130,8 +140,6 @@ func handleRedisSubscribe(broker brokerer) redcon.HandlerFunc {
 					dconn.WriteError("failed to ack")
 					return
 				}
-				dconn.WriteString(respOK)
-				dconn.flush()
 			case CmdBack:
 				if err := c.Back(); err != nil {
 					log.Err(err).Msg("backing")
@@ -156,6 +164,9 @@ func handleRedisSubscribe(broker brokerer) redcon.HandlerFunc {
 				dconn.WriteError("invalid ack command")
 				return
 			}
+
+			dconn.WriteString(respOK)
+			iferr(dconn.flush(), cancel)
 		}
 	}
 }
@@ -188,17 +199,23 @@ func handleRedisPublish(broker brokerer) redcon.HandlerFunc {
 }
 
 type flushable struct {
-	log zerolog.Logger
+	ctx context.Context
+
 	redcon.DetachedConn
 }
 
-// Flush flushes pending messages to the client, handling any errors.
+// Flush flushes pending messages to the client, handling any errors by
+// cancelling the receiver's context.
 func (f *flushable) flush() error {
 	if err := f.DetachedConn.Flush(); err != nil {
-		log.Err(err).Msg("flushing msg")
-
 		return err
 	}
 
 	return nil
+}
+
+func iferr(err error, fn func()) {
+	if err != nil {
+		fn()
+	}
 }
