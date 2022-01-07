@@ -75,11 +75,11 @@ func handleRedisSubscribe(broker brokerer) redcon.HandlerFunc {
 
 		// Detach the connection from the client so that we can control its
 		// lifecycle independently.
-		dconn := conn.Detach()
+		dconn := flushable{log: log, DetachedConn: conn.Detach()}
 		dconn.SetContext(ctx)
 		defer func() {
 			log.Debug().Msg("closing connection")
-			flush(log, dconn)
+			dconn.flush()
 			dconn.Close()
 		}()
 
@@ -99,7 +99,7 @@ func handleRedisSubscribe(broker brokerer) redcon.HandlerFunc {
 			log.Debug().Str("msg", string(val.Raw)).Msg("sending msg")
 
 			dconn.WriteAny(val.Raw)
-			if err := flush(log, dconn); err != nil {
+			if err := dconn.flush(); err != nil {
 				dconn.WriteError("failed to flush msg")
 				return
 			}
@@ -114,8 +114,8 @@ func handleRedisSubscribe(broker brokerer) redcon.HandlerFunc {
 			}
 
 			if len(cmd.Args) != 1 {
-				log.Error().Str("cmd", string(cmd.Raw)).Int("len", len(cmd.Args)).Msg("invalid ack cmd length")
-				dconn.WriteError("invalid ack command")
+				log.Error().Str("cmd", string(cmd.Raw)).Int("len", len(cmd.Args)).Msg("invalid cmd length")
+				dconn.WriteError("invalid command")
 				return
 			}
 
@@ -124,16 +124,36 @@ func handleRedisSubscribe(broker brokerer) redcon.HandlerFunc {
 			log.Debug().Str("cmd", ackCmd).Msg("received ack cmd")
 
 			switch strings.ToUpper(ackCmd) {
-			case "ACK":
+			case CmdAck:
 				if err := c.Ack(); err != nil {
 					log.Err(err).Msg("acking")
 					dconn.WriteError("failed to ack")
 					return
 				}
 				dconn.WriteString(respOK)
-				flush(log, dconn)
+				dconn.flush()
+			case CmdBack:
+				if err := c.Back(); err != nil {
+					log.Err(err).Msg("backing")
+					dconn.WriteError("failed to back")
+					return
+				}
+			case CmdNack:
+				if err := c.Nack(); err != nil {
+					log.Err(err).Msg("Nacking")
+					dconn.WriteError("failed to nack")
+					return
+				}
+			case CmdDack:
+				// TODO read extra arg
+				if err := c.Dack(1); err != nil {
+					log.Err(err).Msg("Nacking")
+					dconn.WriteError("failed to nack")
+					return
+				}
 			default:
 				log.Error().Str("cmd", ackCmd).Msg("invalid ack command")
+				dconn.WriteError("invalid ack command")
 				return
 			}
 		}
@@ -167,9 +187,14 @@ func handleRedisPublish(broker brokerer) redcon.HandlerFunc {
 	}
 }
 
+type flushable struct {
+	log zerolog.Logger
+	redcon.DetachedConn
+}
+
 // Flush flushes pending messages to the client, handling any errors.
-func flush(log zerolog.Logger, dconn redcon.DetachedConn) error {
-	if err := dconn.Flush(); err != nil {
+func (f *flushable) flush() error {
+	if err := f.DetachedConn.Flush(); err != nil {
 		log.Err(err).Msg("flushing msg")
 
 		return err
