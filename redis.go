@@ -75,11 +75,11 @@ func handleRedisSubscribe(broker brokerer) redcon.HandlerFunc {
 
 		// Detach the connection from the client so that we can control its
 		// lifecycle independently.
-		dconn := conn.Detach()
+		dconn := flushable{log: log, DetachedConn: conn.Detach()}
 		dconn.SetContext(ctx)
 		defer func() {
 			log.Debug().Msg("closing connection")
-			flush(log, dconn)
+			dconn.flush()
 			dconn.Close()
 		}()
 
@@ -99,7 +99,7 @@ func handleRedisSubscribe(broker brokerer) redcon.HandlerFunc {
 			log.Debug().Str("msg", string(val.Raw)).Msg("sending msg")
 
 			dconn.WriteAny(val.Raw)
-			if err := flush(log, dconn); err != nil {
+			if err := dconn.flush(); err != nil {
 				dconn.WriteError("failed to flush msg")
 				return
 			}
@@ -130,6 +130,8 @@ func handleRedisSubscribe(broker brokerer) redcon.HandlerFunc {
 					dconn.WriteError("failed to ack")
 					return
 				}
+				dconn.WriteString(respOK)
+				dconn.flush()
 			case CmdBack:
 				if err := c.Back(); err != nil {
 					log.Err(err).Msg("backing")
@@ -185,9 +187,14 @@ func handleRedisPublish(broker brokerer) redcon.HandlerFunc {
 	}
 }
 
+type flushable struct {
+	log zerolog.Logger
+	redcon.DetachedConn
+}
+
 // Flush flushes pending messages to the client, handling any errors.
-func flush(log zerolog.Logger, dconn redcon.DetachedConn) error {
-	if err := dconn.Flush(); err != nil {
+func (f *flushable) flush() error {
+	if err := f.DetachedConn.Flush(); err != nil {
 		log.Err(err).Msg("flushing msg")
 
 		return err
