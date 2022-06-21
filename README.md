@@ -1,4 +1,4 @@
-# MiniQueue
+# miniqueue
 
 ![Tests](https://github.com/tomarrell/miniqueue/workflows/Tests/badge.svg)
 [![Go Report Card](https://goreportcard.com/badge/github.com/tomarrell/miniqueue)](https://goreportcard.com/report/github.com/tomarrell/miniqueue)
@@ -10,7 +10,7 @@ Most messaging workloads don't require enormous amounts of data, endless
 features or infinite scaling. Instead, they'd probably be better off with
 something dead simple.
 
-MiniQueue is just that. A ridiculously simple, high performance queue. You can
+miniqueue is just that. A ridiculously simple, high performance queue. You can
 publish bytes to topics and be sure that your consumers will receive what you
 published, nothing more.
 
@@ -48,7 +48,7 @@ You can also find examples in the [`./examples/`](./examples/) directory.
 
 ## Usage
 
-MiniQueue runs as a single binary, persisting the messages to the filesystem in
+miniqueue runs as a single binary, persisting the messages to the filesystem in
 a directory specified by the `-db` flag and exposes an HTTP/2 server on the port
 specified by the `-port` flag.
 
@@ -75,7 +75,7 @@ Usage of ./miniqueue:
         port used to run the server (default 8080)
 ```
 
-Once running, MiniQueue will expose an HTTP/2 server capable of bidirectional
+Once running, miniqueue will expose an HTTP/2 server capable of bidirectional
 streaming between client and server. Subscribers will be delivered incoming
 messages and can send commands `ACK`, `NACK`, `BACK` [etc](#commands). Upon a
 subscriber disconnecting, any outstanding messages are automatically `NACK`'ed
@@ -192,7 +192,7 @@ Available commands are:
 
 ## Benchmarks
 
-As MiniQueue is still under development, take these benchmarks with a grain of
+As miniqueue is still under development, take these benchmarks with a grain of
 salt. However, for those curious:
 
 **Publish**
