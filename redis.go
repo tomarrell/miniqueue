@@ -192,7 +192,7 @@ func handleRedisPublish(broker brokerer) redcon.HandlerFunc {
 		log.Debug().
 			Str("topic", topic).
 			Str("msg", string(value.Raw)).
-			Msg("published msg")
+			Msg("msg published")
 
 		conn.WriteString(respOK)
 	}
