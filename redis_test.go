@@ -4,11 +4,24 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"testing"
 	"time"
 
 	redcon "github.com/tidwall/redcon"
 )
+
+var redcliPath string
+
+func init() {
+	if runtime.GOOS == "linux" && runtime.GOARCH == "amd64" {
+		redcliPath = "./testdata/cmd/redcli_linux_amd64"
+	} else if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
+		redcliPath = "./testdata/cmd/redcli_darwin_arm64"
+	} else {
+		panic("unsupported test platform")
+	}
+}
 
 func TestRedisPublish(t *testing.T) {
 	t.Run("publish publishes to the respective queue", func(t *testing.T) {
@@ -31,7 +44,7 @@ func TestRedisSubscribe(t *testing.T) {
 
 func publishOne(t *testing.T, topic, value string) {
 	t.Helper()
-	cmd := exec.Command("./testdata/cmd/redcli", "publish", topic, value)
+	cmd := exec.Command(redcliPath, "publish", topic, value)
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -43,7 +56,7 @@ func publishOne(t *testing.T, topic, value string) {
 
 func consumeOne(t *testing.T, topic string) string {
 	t.Helper()
-	cmd := exec.Command("./testdata/cmd/redcli", "subscribe", "-c", "1", topic)
+	cmd := exec.Command(redcliPath, "subscribe", "-c", "1", topic)
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
