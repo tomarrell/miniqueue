@@ -60,7 +60,6 @@ func helperNewTestRedisServer(t *testing.T) *redis {
 
 	s := redcon.NewServer("localhost:6379", r.handleCmd, nil, nil)
 	t.Cleanup(func() {
-		time.Sleep(time.Second)
 		s.Close()
 	})
 
