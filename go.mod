@@ -4,13 +4,17 @@ go 1.16
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/golang/mock v1.4.4-0.20210128224731-b9a8584115bc
+	github.com/golang/mock v1.6.0
+	github.com/golang/snappy v0.0.4 // indirect
 	github.com/gorilla/mux v1.8.0
-	github.com/rs/xid v1.2.1
-	github.com/rs/zerolog v1.20.0
+	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-isatty v0.0.17 // indirect
+	github.com/rs/xid v1.4.0
+	github.com/rs/zerolog v1.28.0
 	github.com/stretchr/testify v1.6.1
 	github.com/syndtr/goleveldb v1.0.0
-	github.com/tidwall/redcon v1.4.1
-	golang.org/x/net v0.0.0-20190620200207-3b0461eec859
-	golang.org/x/sys v0.0.0-20200625212154-ddb9806d33ae // indirect
+	github.com/tidwall/btree v1.6.0 // indirect
+	github.com/tidwall/redcon v1.6.1
+	golang.org/x/net v0.0.0-20210405180319-a5a99cb37ef4
+	golang.org/x/sys v0.4.0 // indirect
 )

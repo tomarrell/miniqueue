@@ -57,10 +57,13 @@ func consumeOne(topic string) (string, error) {
 	return "", nil
 }
 
-func helperNewTestRedisServer(t *testing.T) (*redis, func()) {
+func helperNewTestRedisServer(t *testing.T) *redis {
 	r := newRedis(newBroker(newStore(os.TempDir())))
 
 	s := redcon.NewServer("localhost:6379", r.handleCmd, nil, nil)
+	t.Cleanup(func() {
+		s.Close()
+	})
 
 	go func() {
 		err := s.ListenAndServe()
@@ -69,9 +72,5 @@ func helperNewTestRedisServer(t *testing.T) (*redis, func()) {
 		}
 	}()
 
-	t.Cleanup(func() {
-		s.Close()
-	})
-
-	return r, nil
+	return r
 }
