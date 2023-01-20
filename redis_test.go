@@ -1,31 +1,77 @@
 package main
 
 import (
+	"fmt"
+	"os"
+	"os/exec"
 	"testing"
 
-	gomock "github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/require"
 	redcon "github.com/tidwall/redcon"
 )
 
 func TestRedisPublish(t *testing.T) {
 	t.Run("publish publishes to the respective queue", func(t *testing.T) {
-		// TODO
-		t.Skip()
+		require := require.New(t)
 
-		ctrl := gomock.NewController(t)
-		b := NewMockbrokerer(ctrl)
+		helperNewTestRedisServer(t)
 
-		mockConn := NewMockConn(ctrl)
-		cmd := redcon.Command{
-			Raw:  []byte{},
-			Args: [][]byte{},
-		}
+		err := publishOne("test", "test")
+		require.NoError(err)
 
-		handleRedisPublish(b)(mockConn, cmd)
+		_, err = consumeOne("test")
+		require.NoError(err)
 	})
 }
 
 func TestRedisSubscribe(t *testing.T) {
 	t.Run("subscribe returns waiting message", func(t *testing.T) {
 	})
+}
+
+// Helpers
+
+func publishOne(topic, value string) error {
+	cmd := exec.Command("./testdata/cmd/redcli", "publish", topic, value)
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(string(out))
+
+	return nil
+}
+
+func consumeOne(topic string) (string, error) {
+	cmd := exec.Command("./testdata/cmd/redcli", "subscribe", "-c", "1", topic)
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+
+	fmt.Println(string(out))
+
+	return "", nil
+}
+
+func helperNewTestRedisServer(t *testing.T) (*redis, func()) {
+	r := newRedis(newBroker(newStore(os.TempDir())))
+
+	s := redcon.NewServer("localhost:6379", r.handleCmd, nil, nil)
+
+	go func() {
+		err := s.ListenAndServe()
+		if err != nil {
+			t.Error(err)
+		}
+	}()
+
+	t.Cleanup(func() {
+		s.Close()
+	})
+
+	return r, nil
 }

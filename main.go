@@ -92,7 +92,7 @@ func runRedis(b brokerer, tlsCertPath, tlsKeyPath *string) {
 
 	r := newRedis(b)
 
-	err := redcon.ListenAndServe(":6379", r.handleCmd, nil, nil)
+	err := redcon.ListenAndServe("localhost:6379", r.handleCmd, nil, nil)
 	if err != nil {
 		log.Err(err).Msg("closing server")
 	}

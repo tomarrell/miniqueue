@@ -131,7 +131,7 @@ func TestSubscribeAck(t *testing.T) {
 func TestServerPublishSubscribeAck(t *testing.T) {
 	assert := assert.New(t)
 
-	srv, _, srvCloser := helperNewTestServer(t)
+	srv, _, srvCloser := helperNewTestHTTPServer(t)
 	defer srvCloser()
 
 	// Publish
@@ -170,7 +170,7 @@ func TestServerPublishSubscribeAck(t *testing.T) {
 func TestServerNack(t *testing.T) {
 	assert := assert.New(t)
 
-	srv, _, srvCloser := helperNewTestServer(t)
+	srv, _, srvCloser := helperNewTestHTTPServer(t)
 	defer srvCloser()
 
 	msg1 := "test_msg_1"
@@ -191,7 +191,7 @@ func TestServerNack(t *testing.T) {
 func TestServerBack(t *testing.T) {
 	assert := assert.New(t)
 
-	srv, _, srvCloser := helperNewTestServer(t)
+	srv, _, srvCloser := helperNewTestHTTPServer(t)
 	defer srvCloser()
 
 	msg1 := "test_msg_1"
@@ -215,7 +215,7 @@ func TestServerBack(t *testing.T) {
 func TestServerDack_MissingArg(t *testing.T) {
 	assert := assert.New(t)
 
-	srv, _, srvCloser := helperNewTestServer(t)
+	srv, _, srvCloser := helperNewTestHTTPServer(t)
 	defer srvCloser()
 
 	msg1 := "test_msg_1"
@@ -236,7 +236,7 @@ func TestServerDack_MissingArg(t *testing.T) {
 func TestServerDack_InvalidArg(t *testing.T) {
 	assert := assert.New(t)
 
-	srv, _, srvCloser := helperNewTestServer(t)
+	srv, _, srvCloser := helperNewTestHTTPServer(t)
 	defer srvCloser()
 
 	msg1 := "test_msg_1"
@@ -260,7 +260,7 @@ func TestServerDack(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	srv, hooks, srvCloser := helperNewTestServer(t)
+	srv, hooks, srvCloser := helperNewTestHTTPServer(t)
 	defer srvCloser()
 	go hooks.b.ProcessDelays(ctx, 100*time.Millisecond)
 
@@ -284,7 +284,7 @@ func TestServerDack(t *testing.T) {
 func TestServerConnectionLost(t *testing.T) {
 	assert := assert.New(t)
 
-	srv, _, srvCloser := helperNewTestServer(t)
+	srv, _, srvCloser := helperNewTestHTTPServer(t)
 	defer srvCloser()
 
 	// Publish twice
@@ -322,7 +322,7 @@ func TestServerConnectionLost(t *testing.T) {
 func TestServerMultiConsumer(t *testing.T) {
 	assert := assert.New(t)
 
-	srv, _, srvCloser := helperNewTestServer(t)
+	srv, _, srvCloser := helperNewTestHTTPServer(t)
 	defer srvCloser()
 
 	// Publish
@@ -377,7 +377,7 @@ func TestServerMultiConsumer(t *testing.T) {
 func TestServerMultiConsumerConnectionLost(t *testing.T) {
 	assert := assert.New(t)
 
-	srv, hooks, srvCloser := helperNewTestServer(t)
+	srv, hooks, srvCloser := helperNewTestHTTPServer(t)
 	defer srvCloser()
 
 	// Publish once
@@ -421,7 +421,7 @@ func TestServerMultiConsumerConnectionLost(t *testing.T) {
 func TestServerDelete(t *testing.T) {
 	assert := assert.New(t)
 
-	srv, _, srvCloser := helperNewTestServer(t)
+	srv, _, srvCloser := helperNewTestHTTPServer(t)
 	t.Cleanup(srvCloser)
 
 	// Publish twice
@@ -501,7 +501,7 @@ type hooks struct {
 
 // Returns a new, started, httptest server and a corresponding function which
 // will force close connections and close the server when called.
-func helperNewTestServer(t *testing.T) (*httptest.Server, hooks, func()) {
+func helperNewTestHTTPServer(t *testing.T) (*httptest.Server, hooks, func()) {
 	t.Helper()
 
 	db, err := leveldb.Open(storage.NewMemStorage(), nil)
