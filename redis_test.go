@@ -27,11 +27,10 @@ func TestRedisPublish(t *testing.T) {
 	t.Run("publish publishes to the respective queue", func(t *testing.T) {
 		// require := require.New(t)
 
-		helperNewTestRedisServer(t)
+		_ = helperNewTestRedisServer(t)
 
 		publishOne(t, "test", "test")
-
-		consumeOne(t, "test")
+		_ = consumeOne(t, "test")
 	})
 }
 

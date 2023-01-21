@@ -4,7 +4,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/tomarrell/miniqueue)](https://goreportcard.com/report/github.com/tomarrell/miniqueue)
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/tomarrell/miniqueue)
 
-A stupid simple, single binary message queue using HTTP/2.
+A stupid simple, single binary message queue using HTTP/2 or Redis Protocol.
 
 Most messaging workloads don't require enormous amounts of data, endless
 features or infinite scaling. Instead, they'd probably be better off with
@@ -16,6 +16,7 @@ published, nothing more.
 
 ## Features
 
+- Redis Protocol Support
 - Simple to run
 - Very fast, see [benchmarks](#benchmarks)
 - Not infinitely scalable
@@ -24,7 +25,7 @@ published, nothing more.
 - Publish
 - Subscribe
 - Acknowledgements
-- Persistent
+- Persistence
 - Prometheus metrics [WIP]
 
 ## API
