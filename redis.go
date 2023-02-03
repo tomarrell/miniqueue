@@ -65,7 +65,11 @@ func handleRedisSubscribe(broker brokerer) redcon.HandlerFunc {
 	return func(conn redcon.Conn, rcmd redcon.Command) {
 		topic := string(rcmd.Args[1])
 		c := broker.Subscribe(topic)
-		defer broker.Unsubscribe(topic, c.id)
+		defer func() {
+			if err := broker.Unsubscribe(topic, c.id); err != nil {
+				log.Err(err).Msg("failed to unsubscribe")
+			}
+		}()
 
 		log := log.With().Str("id", c.id).Logger()
 

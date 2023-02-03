@@ -31,6 +31,10 @@ type consumer struct {
 	outstanding bool // indicates whether the consumer has an outstanding message to ack
 }
 
+func (c *consumer) String() string {
+	return fmt.Sprintf("consumer{id: %s}", c.id)
+}
+
 // Next will attempt to retrieve the next value on the topic, or it will
 // block waiting for a msg indicating there is a new value available.
 func (c *consumer) Next(ctx context.Context) (val *value, err error) {

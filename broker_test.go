@@ -55,6 +55,21 @@ func TestBroker_Unsubscribe(t *testing.T) {
 		require.Len(t, b.consumers[topic], 0)
 	})
 
+	t.Run("removes correct consumer if there are multiple", func(t *testing.T) {
+		b := broker{
+			consumers: map[string][]*consumer{},
+		}
+
+		topic := "test_topic"
+
+		c1 := b.Subscribe(topic)
+		c2 := b.Subscribe(topic)
+		err := b.Unsubscribe(topic, c1.id)
+		require.NoError(t, err)
+		require.Len(t, b.consumers[topic], 1)
+		require.Equal(t, c2.id, b.consumers[topic][0].id)
+	})
+
 	t.Run("returns an error if the consumer doesn't exist", func(t *testing.T) {
 		b := broker{
 			consumers: map[string][]*consumer{},

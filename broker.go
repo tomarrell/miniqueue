@@ -119,7 +119,10 @@ func (b *broker) Subscribe(topic string) *consumer {
 // Unsubscribe removes the consumer from the available pool for the topic and
 // returns any messages with outstanding acknowledgements to the queue.
 func (b *broker) Unsubscribe(topic, id string) error {
+	b.RLock()
 	consumers := b.consumers[topic]
+	b.RUnlock()
+
 	for i, c := range consumers {
 		if c.id == id {
 			if c.outstanding {
@@ -130,8 +133,11 @@ func (b *broker) Unsubscribe(topic, id string) error {
 			log.Debug().Str("id", c.id).Msg("unsubscribing consumer")
 
 			b.Lock()
-			b.consumers[topic] = append(consumers[:i], consumers[i+1:]...)
+			length := len(b.consumers[topic])
+			b.consumers[topic][i] = b.consumers[topic][length-1]
+			b.consumers[topic] = b.consumers[topic][:length-1]
 			b.Unlock()
+
 			return nil
 		}
 	}
