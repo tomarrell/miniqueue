@@ -90,7 +90,7 @@ func (c *consumer) Nack() error {
 	return nil
 }
 
-// Back negatively acknowleges a message, returning it to the back of the queue
+// Back negatively acknowledges a message, returning it to the back of the queue
 // for consumption.
 func (c *consumer) Back() error {
 	if err := c.store.Back(c.topic, c.ackOffset); err != nil {

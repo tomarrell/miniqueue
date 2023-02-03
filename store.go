@@ -100,7 +100,7 @@ const (
 	headPosKeyFmt = "t-%s-head" // key: [topic]-head
 	tailPosKeyFmt = "t-%s-tail" // key: [topic]-tail
 
-	// The ack topic queue is an auxillary queue which allows keeping track of
+	// The ack topic queue is an auxiliary queue which allows keeping track of
 	// outstanding messages which are waiting on a consumer acknowledgement
 	// command. We only ever append to the end of this queue, delete records once
 	// they have been ACK'ed or moved back to the primary queue for reprocessing.
