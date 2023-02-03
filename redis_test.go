@@ -5,9 +5,11 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	redcon "github.com/tidwall/redcon"
 )
 
@@ -25,12 +27,16 @@ func init() {
 
 func TestRedisPublish(t *testing.T) {
 	t.Run("publish publishes to the respective queue", func(t *testing.T) {
-		// require := require.New(t)
-
 		_ = helperNewTestRedisServer(t)
 
-		publishOne(t, "test", "test")
-		_ = consumeOne(t, "test")
+		var (
+			topic = "topic"
+			val   = "value"
+		)
+
+		publishOne(t, topic, val)
+		res := consumeOne(t, topic)
+		require.Equal(t, val, res)
 	})
 }
 
@@ -45,26 +51,30 @@ func publishOne(t *testing.T, topic, value string) {
 	t.Helper()
 	cmd := exec.Command(redcliPath, "publish", topic, value)
 
-	out, err := cmd.CombinedOutput()
+	raw, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatal(err, string(out))
+		t.Fatal(err, string(raw))
 	}
 
-	fmt.Println(string(out))
+	out := strings.TrimSuffix(string(raw), "\n")
+
+	fmt.Println(out)
 }
 
 func consumeOne(t *testing.T, topic string) string {
 	t.Helper()
 	cmd := exec.Command(redcliPath, "subscribe", "-c", "1", topic)
 
-	out, err := cmd.CombinedOutput()
+	raw, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatal(err, string(out))
+		t.Fatal(err, string(raw))
 	}
 
-	fmt.Println(string(out))
+	out := strings.TrimSuffix(string(raw), "\n")
 
-	return string(out)
+	fmt.Println(out)
+
+	return out
 }
 
 func helperNewTestRedisServer(t *testing.T) *redis {

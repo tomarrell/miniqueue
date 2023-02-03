@@ -30,6 +30,17 @@ published, nothing more.
 
 ## API
 
+### Redis
+
+You can communicate with miniqueue using any major Redis library which supports
+custom commands. The command set is identical to the HTTP/2 implementation and
+listed under the [commands](#commands) heading.
+
+Examples of using the Redis interface can be found in the
+[redis_test.go](./redis_test.go) file.
+
+### HTTP/2
+
 - POST `/publish/:topic`, where the body contains the bytes to publish to the topic.
 
   ```bash

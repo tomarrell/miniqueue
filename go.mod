@@ -9,7 +9,7 @@ require (
 	github.com/rs/zerolog v1.28.0
 	github.com/stretchr/testify v1.6.1
 	github.com/syndtr/goleveldb v1.0.0
-	github.com/tidwall/redcon v1.6.1
+	github.com/tidwall/redcon v1.6.2
 	golang.org/x/net v0.0.0-20210405180319-a5a99cb37ef4
 )
 
